@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SiliconSense Studio</title>
+<link rel="stylesheet" href="/ui/pianoroll.css">
+<style>
+  :root{
+    --deep:#0a0c10; --concrete:#10131a; --ash:#161a22; --smoke:#232834;
+    --line:#222733; --line2:#2e3442; --snow:#e8ecf2; --silver:#8a93a3;
+    --muted:#5b6472; --accent:#5ad1ff; --accent-dim:rgba(90,209,255,.12);
+    --on-accent:#061018; --bot:#c78cff;
+    --fm:ui-monospace,'JetBrains Mono',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--deep);color:var(--snow);
+       font:15px/1.6 ui-sans-serif,system-ui,'Segoe UI',Roboto,sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;padding:20px 16px 60px}
+  h1{font-size:19px;margin:0 0 2px}
+  .sub{color:var(--silver);font-size:13px;margin:0 0 14px}
+  .gpu{font:12px var(--fm);color:var(--muted);margin-bottom:14px}
+  .gpu b{color:var(--accent)}
+  .tabs{display:flex;gap:6px;margin-bottom:14px}
+  .tabs button{background:var(--ash);color:var(--silver);border:1px solid var(--line);
+    border-radius:7px;padding:8px 16px;font:600 13px inherit;cursor:pointer}
+  .tabs button.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+  .pane{background:var(--concrete);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+  label{display:block;font-size:12px;color:var(--silver);margin:0 0 5px}
+  label .s{color:var(--muted)}
+  textarea,select,input[type=number]{width:100%;background:var(--ash);color:var(--snow);
+    border:1px solid var(--line);border-radius:6px;padding:9px;font:13px/1.5 var(--fm);resize:vertical}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:820px){.two{grid-template-columns:1fr}}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
+  .row label{margin:0;white-space:nowrap;display:flex;align-items:center;gap:6px}
+  .row select,.row input[type=number]{width:auto}
+  button.go{background:var(--accent);color:var(--on-accent);border:0;border-radius:6px;
+    padding:10px 18px;font:600 14px inherit;cursor:pointer}
+  button.go:disabled{opacity:.5;cursor:default}
+  button.ghost{background:var(--ash);color:var(--snow);border:1px solid var(--line);
+    border-radius:6px;padding:9px 14px;font:13px inherit;cursor:pointer}
+  .status{margin-top:12px;font:13px var(--fm);color:var(--silver);min-height:20px}
+  .status.bad{color:#ff8b6b}
+  audio{width:100%;margin-top:10px}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  .drop{border:1px dashed var(--line2);border-radius:8px;padding:22px;text-align:center;
+    color:var(--silver);cursor:pointer}
+  .drop:hover{border-color:var(--accent)}
+  .hidden{display:none}
+  .head{display:flex;align-items:flex-start;gap:12px}
+  .head .grow{flex:1;min-width:0}
+  .lang{display:flex;gap:4px;flex:none}
+  .lang button{background:var(--ash);color:var(--silver);border:1px solid var(--line);
+    border-radius:6px;padding:5px 10px;font:600 12px inherit;cursor:pointer}
+  .lang button.on{background:var(--smoke);color:var(--snow);border-color:var(--line2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div class="grow">
+      <h1 data-i18n="title">SiliconSense Studio</h1>
+      <p class="sub" data-i18n="sub"></p>
+    </div>
+    <div class="lang">
+      <button id="lang-ru">RU</button><button id="lang-en">EN</button>
+    </div>
+  </div>
+  <div class="gpu" id="gpu"></div>
+
+  <div class="tabs">
+    <button id="tab-song" class="on" data-i18n="tab_song"></button>
+    <button id="tab-cover" data-i18n="tab_cover"></button>
+  </div>
+
+  <!-- ---------- песня ---------- -->
+  <div id="view-song">
+    <div class="pane">
+      <div class="two">
+        <div>
+          <label data-i18n="lbl_style"></label>
+          <textarea id="style" rows="3"></textarea>
+          <div class="hint" data-i18n="hint_neg"></div>
+        </div>
+        <div>
+          <label data-i18n="lbl_lyrics"></label>
+          <textarea id="lyrics" rows="7"></textarea>
+        </div>
+      </div>
+      <div class="row">
+        <label><span data-i18n="lbl_seconds"></span> <input type="number" id="seconds" value="60" min="20" max="360" step="10"></label>
+        <label><span data-i18n="lbl_cfg"></span>
+          <select id="cfg"><option value="" data-i18n="cfg_off"></option><option value="1.2">1.2</option><option value="1.5">1.5</option></select></label>
+        <span style="flex:1"></span>
+        <button class="go" id="go-song" data-i18n="btn_song"></button>
+      </div>
+      <div class="hint" data-i18n="hint_time"></div>
+      <div class="status" id="st-song"></div>
+      <audio id="pl-song" controls class="hidden"></audio>
+    </div>
+  </div>
+
+  <!-- ---------- кавер ---------- -->
+  <div id="view-cover" class="hidden">
+    <div class="pane">
+      <label data-i18n="lbl_source"></label>
+      <div class="drop" id="drop" data-i18n="drop"></div>
+      <input type="file" id="file" accept="audio/*" class="hidden">
+      <div class="row">
+        <button class="ghost" id="go-scan" disabled data-i18n="btn_scan"></button>
+        <span class="status" id="st-scan" style="margin:0"></span>
+      </div>
+    </div>
+
+    <div class="pane hidden" id="pane-roll">
+      <label data-i18n="lbl_melody"></label>
+      <div id="roll"></div>
+    </div>
+
+    <div class="pane hidden" id="pane-sing">
+      <div class="two">
+        <div>
+          <label data-i18n="lbl_cstyle"></label>
+          <textarea id="c-style" rows="3"></textarea>
+        </div>
+        <div>
+          <label data-i18n="lbl_clyrics"></label>
+          <textarea id="c-lyrics" rows="7"></textarea>
+        </div>
+      </div>
+      <div class="row">
+        <label><span data-i18n="lbl_cfg"></span>
+          <select id="c-cfg"><option value="" data-i18n="cfg_off"></option><option value="1.2">1.2</option><option value="1.5">1.5</option></select></label>
+        <span style="flex:1"></span>
+        <button class="go" id="go-cover" data-i18n="btn_cover"></button>
+      </div>
+      <div class="status" id="st-cover"></div>
+      <audio id="pl-cover" controls class="hidden"></audio>
+    </div>
+  </div>
+</div>
+
+<script src="/ui/pianoroll.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const HAS_ROLL = (typeof PR !== 'undefined');
+if (HAS_ROLL){ PR.config.storageKey = 'siliconsense_pc_nudge'; }
+
+/* ---------- языки ----------
+   Тексты живут здесь, а не в разметке: иначе вторая локаль неизбежно отстаёт
+   от первой. Пример стиля и текста песни тоже переводим — на чужом языке
+   образец бесполезен. */
+const L = {
+  ru: {
+    title:'SiliconSense Студия',
+    sub:'Всё считается на вашей видеокарте. В интернет ничего не уходит.',
+    gpu_check:'проверяю видеокарту…',
+    gpu_ok:'видеокарта: <b>%s</b>, %v ГБ',
+    gpu_bad:'видеокарта не определилась: ',
+    no_server:'сервер не отвечает',
+    tab_song:'Песня по тексту',
+    tab_cover:'Кавер из записи',
+    lbl_style:'Стиль <span class="s">через запятую, важное вперёд: язык, жанр, голос, инструменты, темп</span>',
+    hint_neg:'Отрицания работают: «no guitar» уберёт гитару.',
+    lbl_lyrics:'Текст <span class="s">с тегами секций</span>',
+    lbl_seconds:'длина, с',
+    lbl_cfg:'сила стиля',
+    cfg_off:'выкл.',
+    btn_song:'Написать песню',
+    hint_time:'Считается примерно столько же, сколько длится песня. На карте с 6 ГБ проверено до двух минут.',
+    lbl_source:'Исходная запись <span class="s">mp3, wav или flac</span>',
+    drop:'Перетащите файл сюда или щёлкните, чтобы выбрать',
+    btn_scan:'Снять партитуру',
+    lbl_melody:'Мелодия <span class="s">ноты можно двигать мышкой, прежде чем петь</span>',
+    lbl_cstyle:'Стиль кавера',
+    lbl_clyrics:'Текст <span class="s">свой, на эту мелодию</span>',
+    btn_cover:'Спеть по этой партитуре',
+    sending:'отправляю…', working:'работаю…', uploading:'загружаю файл…',
+    done:'готово за %t с', scan_done:'партитура снята за %t с',
+    failed:'не получилось', refused:'сервер отказал',
+    page_err:'Ошибка на странице: ', mb:'МБ',
+    ex_style:'Russian, folk rock ballad, warm male tenor, acoustic guitar, upright bass, brushed drums, 88 BPM',
+    ex_lyrics:'[Verse]\nГород спит на дне сентября\nФонари тонут в тишине\n\n[Chorus]\nНе гасни, останься со мной\nЯ держу твоё имя в горсти',
+    ex_cstyle:'Russian, upbeat indie pop, warm female vocals, bright electric guitars, groovy bass, 96 BPM',
+    ex_clyrics:'[Verse]\nПервая строчка вашего текста\nВторая строчка вашего текста'
+  },
+  en: {
+    title:'SiliconSense Studio',
+    sub:'Everything runs on your own graphics card. Nothing leaves your computer.',
+    gpu_check:'checking the graphics card…',
+    gpu_ok:'graphics card: <b>%s</b>, %v GB',
+    gpu_bad:'graphics card not detected: ',
+    no_server:'the server is not responding',
+    tab_song:'Song from lyrics',
+    tab_cover:'Cover from a recording',
+    lbl_style:'Style <span class="s">comma separated, most important first: language, genre, voice, instruments, tempo</span>',
+    hint_neg:'Negations work: “no guitar” removes the guitar.',
+    lbl_lyrics:'Lyrics <span class="s">with section tags</span>',
+    lbl_seconds:'length, s',
+    lbl_cfg:'style strength',
+    cfg_off:'off',
+    btn_song:'Write the song',
+    hint_time:'Takes about as long as the song itself. Tested up to two minutes on a 6 GB card.',
+    lbl_source:'Source recording <span class="s">mp3, wav or flac</span>',
+    drop:'Drop a file here, or click to choose one',
+    btn_scan:'Transcribe the melody',
+    lbl_melody:'Melody <span class="s">drag the notes with the mouse before singing</span>',
+    lbl_cstyle:'Cover style',
+    lbl_clyrics:'Lyrics <span class="s">your own, written to this melody</span>',
+    btn_cover:'Sing this melody',
+    sending:'sending…', working:'working…', uploading:'uploading the file…',
+    done:'done in %t s', scan_done:'melody transcribed in %t s',
+    failed:'it did not work', refused:'the server refused the request',
+    page_err:'Page error: ', mb:'MB',
+    ex_style:'English, folk rock ballad, warm male tenor, acoustic guitar, upright bass, brushed drums, 88 BPM',
+    ex_lyrics:'[Verse]\nThe city sleeps at the bottom of September\nStreetlights are drowning in the quiet\n\n[Chorus]\nDo not go out, stay here with me\nI hold your name in my hands',
+    ex_cstyle:'English, upbeat indie pop, warm female vocals, bright electric guitars, groovy bass, 96 BPM',
+    ex_clyrics:'[Verse]\nThe first line of your lyrics\nThe second line of your lyrics'
+  }
+};
+
+const LANG_KEY = 'siliconsense_pc_lang';
+let lang = 'en';
+try { lang = localStorage.getItem(LANG_KEY) || ''; } catch(e){ lang = ''; }
+if (lang !== 'ru' && lang !== 'en') {
+  lang = (navigator.language || '').toLowerCase().startsWith('ru') ? 'ru' : 'en';
+}
+function t(key){ return (L[lang] && L[lang][key] !== undefined) ? L[lang][key] : L.en[key]; }
+
+function applyLang(){
+  document.documentElement.lang = lang;
+  document.title = t('title');
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.innerHTML = t(el.dataset.i18n); });
+  $('#lang-ru').classList.toggle('on', lang === 'ru');
+  $('#lang-en').classList.toggle('on', lang === 'en');
+  if (HAS_ROLL){ PR.config.locale = lang; }
+  // Образцы подставляем, только пока человек их не тронул: иначе переключение
+  // языка затрёт уже написанный текст.
+  [['#style','ex_style'],['#lyrics','ex_lyrics'],['#c-style','ex_cstyle'],['#c-lyrics','ex_clyrics']]
+    .forEach(([sel, key]) => {
+      const el = $(sel); if (!el) return;
+      const untouched = !el.value.trim() || el.dataset.sample === '1';
+      if (untouched){ el.value = t(key); el.dataset.sample = '1'; }
+    });
+  showGpu();
+}
+document.querySelectorAll('textarea').forEach(el => {
+  el.addEventListener('input', () => { el.dataset.sample = '0'; });
+});
+function setLang(v){
+  lang = v;
+  try { localStorage.setItem(LANG_KEY, v); } catch(e){}
+  applyLang();
+  // Пианоролл рисует свои подписи при монтировании — пересобираем, если он уже на экране.
+  if (HAS_ROLL && window.__prState && !$('#pane-roll').classList.contains('hidden')){
+    try { PR.mount($('#roll'), window.__prState, () => {}); } catch(e){}
+  }
+}
+
+window.addEventListener('error', e => {
+  const s = $('#st-song');
+  if (s){ s.textContent = t('page_err') + e.message; s.classList.add('bad'); }
+});
+
+let gpuState = null;
+function showGpu(){
+  const el = $('#gpu'); if (!el) return;
+  if (gpuState === null){ el.textContent = t('gpu_check'); return; }
+  if (gpuState === false){ el.textContent = t('no_server'); return; }
+  el.innerHTML = gpuState.ok
+    ? t('gpu_ok').replace('%s', gpuState.name).replace('%v', gpuState.vram_gb)
+    : t('gpu_bad') + (gpuState.error || '');
+}
+fetch('/api/gpu').then(r => r.json())
+  .then(g => { gpuState = g; showGpu(); })
+  .catch(() => { gpuState = false; showGpu(); });
+
+$('#lang-ru').onclick = () => setLang('ru');
+$('#lang-en').onclick = () => setLang('en');
+applyLang();
+
+/* ---------- вкладки ---------- */
+function tab(which){
+  $('#tab-song').classList.toggle('on', which === 'song');
+  $('#tab-cover').classList.toggle('on', which === 'cover');
+  $('#view-song').classList.toggle('hidden', which !== 'song');
+  $('#view-cover').classList.toggle('hidden', which !== 'cover');
+}
+$('#tab-song').onclick = () => tab('song');
+$('#tab-cover').onclick = () => tab('cover');
+
+/* ---------- общее ожидание ---------- */
+function watch(id, statusEl, onDone){
+  const t = setInterval(async () => {
+    let j;
+    try { j = await (await fetch('/api/status/' + id)).json(); } catch(e){ return; }
+    if (j.state === 'done'){ clearInterval(t); statusEl.classList.remove('bad'); onDone(j); }
+    else if (j.state === 'failed'){
+      clearInterval(t);
+      statusEl.textContent = j.error || t('failed');
+      statusEl.classList.add('bad');
+      document.querySelectorAll('button.go, #go-scan').forEach(b => b.disabled = false);
+    } else statusEl.textContent = j.message || t('working');
+  }, 1200);
+}
+
+async function post(url, body, headers){
+  const r = await fetch(url, {method:'POST', headers: headers || {'Content-Type':'application/json'},
+                             body: headers ? body : JSON.stringify(body)});
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || t('refused'));
+  return j;
+}
+
+/* ---------- песня ---------- */
+$('#go-song').onclick = async () => {
+  const st = $('#st-song');
+  $('#go-song').disabled = true; st.classList.remove('bad'); st.textContent = t('sending');
+  try {
+    const j = await post('/api/generate', {
+      style: $('#style').value.trim(), lyrics: $('#lyrics').value.trim(),
+      seconds: parseFloat($('#seconds').value) || 60, lang: lang,
+      cfg_scale: $('#cfg').value ? parseFloat($('#cfg').value) : null});
+    watch(j.id, st, r => {
+      st.textContent = t('done').replace('%t', r.took);
+      const p = $('#pl-song'); p.src = r.file + '?t=' + Date.now(); p.classList.remove('hidden');
+      $('#go-song').disabled = false;
+    });
+  } catch(e){ st.textContent = e.message; st.classList.add('bad'); $('#go-song').disabled = false; }
+};
+
+/* ---------- кавер ---------- */
+let picked = null, score = null;
+$('#drop').onclick = () => $('#file').click();
+$('#drop').ondragover = e => { e.preventDefault(); };
+$('#drop').ondrop = e => { e.preventDefault(); take(e.dataTransfer.files[0]); };
+$('#file').onchange = e => take(e.target.files[0]);
+
+function take(f){
+  if (!f) return;
+  picked = f;
+  $('#drop').textContent = f.name + '  ' + Math.round(f.size/1048576*10)/10 + ' ' + t('mb');
+  $('#go-scan').disabled = false;
+}
+
+$('#go-scan').onclick = async () => {
+  if (!picked) return;
+  const st = $('#st-scan');
+  $('#go-scan').disabled = true; st.classList.remove('bad'); st.textContent = t('uploading');
+  try {
+    const buf = await picked.arrayBuffer();
+    const j = await post('/api/scan', buf, {'Content-Type':'application/octet-stream',
+                                            'X-Lang': lang,
+                                            'X-Filename': encodeURIComponent(picked.name)});
+    watch(j.id, st, r => {
+      st.textContent = t('scan_done').replace('%t', r.took);
+      score = r.abc;
+      $('#pane-roll').classList.remove('hidden');
+      $('#pane-sing').classList.remove('hidden');
+      if (HAS_ROLL){
+        try {
+          // Держим состояние редактора: именно из него берём партитуру при пении,
+          // иначе правки мышкой никуда не попадут.
+          window.__prState = PR.parse(score);
+          PR.mount($('#roll'), window.__prState, () => {});
+        } catch(e){ console.warn('партитуру не разобрали', e); }
+      }
+      $('#go-scan').disabled = false;
+    });
+  } catch(e){ st.textContent = e.message; st.classList.add('bad'); $('#go-scan').disabled = false; }
+};
+
+$('#go-cover').onclick = async () => {
+  const st = $('#st-cover');
+  $('#go-cover').disabled = true; st.classList.remove('bad'); st.textContent = t('sending');
+  try {
+    // Берём партитуру ИЗ РЕДАКТОРА, а не исходную: смысл всей затеи в том,
+    // что человек её поправил.
+    let abc = score;
+    if (HAS_ROLL && window.__prState) { try { abc = PR.build(window.__prState); } catch(e){} }
+    const j = await post('/api/generate', {
+      style: $('#c-style').value.trim(), lyrics: $('#c-lyrics').value.trim(), abc: abc, lang: lang,
+      cfg_scale: $('#c-cfg').value ? parseFloat($('#c-cfg').value) : null});
+    watch(j.id, st, r => {
+      st.textContent = t('done').replace('%t', r.took);
+      const p = $('#pl-cover'); p.src = r.file + '?t=' + Date.now(); p.classList.remove('hidden');
+      $('#go-cover').disabled = false;
+    });
+  } catch(e){ st.textContent = e.message; st.classList.add('bad'); $('#go-cover').disabled = false; }
+};
+</script>
+</body>
+</html>

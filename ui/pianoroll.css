@@ -1,0 +1,56 @@
+/* pianoroll.css — styles for the piano-roll editor.
+
+   Colours are read from CSS variables with built-in fallbacks:
+   var(--accent, #5ad1ff). Drop this file into any page and it looks right;
+   drop it into an app that already defines --accent, --line and friends and
+   the editor picks up that theme instead. Never define those variables here,
+   or a host application's theme would be overridden.
+
+   Every class is prefixed pr- to avoid clashes. */
+
+.pr{--pr-row:rgba(255,255,255,.045);--pr-beat:rgba(255,255,255,.07);--pr-bar:rgba(255,255,255,.18);display:flex;flex-direction:column;gap:8px}
+.pr-toolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pr-toolbar .pr-sp{flex:1}
+.pr-info{font:400 11.5px var(--fm, ui-monospace,'JetBrains Mono',Menlo,Consolas,monospace);color:var(--silver, #8a93a3)}
+.pr-lab{display:flex;align-items:center;gap:5px;font:400 11px var(--fm, ui-monospace,'JetBrains Mono',Menlo,Consolas,monospace);color:var(--muted, #5b6472)}
+.pr-lab .b{padding:4px 7px}
+.pr-num{width:58px;text-align:center;background:var(--smoke, #232834);border:1px solid var(--line2, #2e3442);border-radius:7px;color:var(--snow, #e8ecf2);font:400 12px var(--fm, ui-monospace,'JetBrains Mono',Menlo,Consolas,monospace);padding:4px 6px}
+.pr-hint{font:400 11px var(--fm, ui-monospace,'JetBrains Mono',Menlo,Consolas,monospace);color:var(--muted, #5b6472);line-height:1.6}
+/* The editor is a window into the score, not the whole of it: without a height it
+   grows by as many note rows as the piece has and eats half the screen. Drag the
+   bottom-right corner to resize, or set --pr-height from the host page. */
+.pr-main{display:grid;grid-template-columns:62px 1fr;grid-template-rows:26px 1fr;border:1px solid var(--line2, #2e3442);border-radius:10px;overflow:hidden;background:var(--deep, #0a0c10);height:var(--pr-height, 320px);min-height:150px;resize:vertical}
+.pr-corner{background:var(--concrete, #10131a);border-right:1px solid var(--line, #222733);border-bottom:1px solid var(--line, #222733)}
+.pr-ruler-wrap{overflow:hidden;background:var(--concrete, #10131a);border-bottom:1px solid var(--line, #222733)}
+.pr-ruler{position:relative;height:26px}
+.pr-bar{position:absolute;top:0;height:26px;border-left:1px solid var(--line2, #2e3442);box-sizing:border-box;padding-left:4px;overflow:hidden;white-space:nowrap}
+.pr-bn{font:400 9px var(--fm, ui-monospace,'JetBrains Mono',Menlo,Consolas,monospace);color:var(--muted, #5b6472)}
+.pr-sec{font:500 9px var(--fm, ui-monospace,'JetBrains Mono',Menlo,Consolas,monospace);color:var(--accent, #5ad1ff);margin-left:5px;text-transform:uppercase;letter-spacing:.06em}
+.pr-ch{display:inline-block;font:500 10px var(--fm, ui-monospace,'JetBrains Mono',Menlo,Consolas,monospace);color:var(--silver, #8a93a3);margin-left:5px;padding:0 3px;border-radius:3px;cursor:pointer}
+.pr-ch:hover{background:var(--accent, #5ad1ff);color:var(--on-accent, #061018)}
+.pr-keys-wrap{overflow:hidden;background:var(--concrete, #10131a);border-right:1px solid var(--line, #222733)}
+.pr-keys{position:relative}
+.pr-key{display:flex;align-items:center;justify-content:flex-end;padding-right:5px;font:400 8.5px var(--fm, ui-monospace,'JetBrains Mono',Menlo,Consolas,monospace);color:var(--muted, #5b6472);border-bottom:1px solid rgba(255,255,255,.04);box-sizing:border-box;background:#e9ecf0;color:#2a2f38}
+.pr-key.bk{background:#2b313a;color:#8b93a0}
+.pr-grid-wrap{overflow:auto}
+.pr-grid{position:relative;cursor:crosshair}
+.pr-bands{position:absolute;inset:0;pointer-events:none}
+.pr-band{position:absolute;left:0;right:0;background:rgba(255,255,255,.028)}
+.pr-notes{position:absolute;inset:0}
+.pr-note{position:absolute;background:var(--accent, #5ad1ff);border-radius:3px;box-shadow:0 0 0 1px rgba(0,0,0,.35) inset;cursor:grab}
+.pr-note:hover{filter:brightness(1.15)}
+.pr-note::after{content:"";position:absolute;right:0;top:0;bottom:0;width:7px;cursor:ew-resize}
+.pr-note.other{background:var(--smoke, #232834);border:1px solid var(--line2, #2e3442);opacity:.6;box-shadow:none;cursor:pointer}
+.pr-note.other:hover{opacity:.9;border-color:var(--accent, #5ad1ff)}
+.pr-note.sel{outline:2px solid var(--snow, #e8ecf2);outline-offset:1px;z-index:3}
+.pr-time{font:500 12px var(--fm, ui-monospace,'JetBrains Mono',Menlo,Consolas,monospace);color:var(--accent, #5ad1ff);min-width:42px}
+.pr-head{position:absolute;top:0;bottom:0;width:2px;background:var(--accent, #5ad1ff);box-shadow:0 0 6px var(--accent, #5ad1ff);pointer-events:none;z-index:4;display:none}
+.pr-ruler{cursor:pointer}
+.pr-note.now{background:#fff6d6;box-shadow:0 0 0 1px var(--accent, #5ad1ff),0 0 12px 2px rgba(255,214,102,.75);z-index:5}
+.pr-note.other.now{background:#cfe6ff;border-color:#8fc4ff;opacity:1;box-shadow:0 0 0 1px #8fc4ff,0 0 10px 1px rgba(143,196,255,.6)}
+.pr-bar.now{background:rgba(255,255,255,.07)}
+.pr-bar.now .pr-bn{color:var(--accent, #5ad1ff)}
+.pr-head{width:2px;background:var(--accent, #5ad1ff);box-shadow:0 0 8px 1px var(--accent, #5ad1ff)}
+.pr-range{width:110px;accent-color:var(--accent, #5ad1ff);vertical-align:middle}
+.pr-nudge-val{font:400 10px var(--fm, ui-monospace,'JetBrains Mono',Menlo,Consolas,monospace);color:var(--accent, #5ad1ff);min-width:46px;display:inline-block}
+.pr-range{width:130px}
