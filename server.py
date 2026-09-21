@@ -104,8 +104,15 @@ def graph_song(style, lyrics, abc, seed, seconds, cfg_scale=None):
         "5": {"class_type": "KSampler", "inputs": dict(model=["1", 0], positive=["2", 0],
               negative=["3", 0], latent_image=["4", 0], seed=seed, **SAMPLER)},
         "6": {"class_type": "VAEDecodeAudio", "inputs": {"samples": ["5", 0], "vae": ["1", 2]}},
-        # SaveAudio проще, чем SaveAudioAdvanced: всегда flac, без парных полей качества.
+        # Сохраняем оба формата сразу. Декодирование уже позади, кодирование стоит
+        # секунду, зато человеку не нужно заранее выбирать и потом переделывать:
+        # mp3 играет везде, flac остаётся без потерь для дальнейшей работы.
         "7": {"class_type": "SaveAudio", "inputs": {"audio": ["6", 0], "filename_prefix": "audio/SiliconSense"}},
+        # Узел помечен в движке устаревшим, но рабочий и простой: у замены качество
+        # задаётся вложенным полем. Версия движка закреплена в start.bat, так что
+        # он никуда не денется до того, как мы сами поднимем метку.
+        "8": {"class_type": "SaveAudioMP3", "inputs": {"audio": ["6", 0], "filename_prefix": "audio/SiliconSense",
+                                                       "quality": "320k"}},
     }
 
 
@@ -152,9 +159,11 @@ def find_text(entry):
 # ---------------------------------------------------------------- задачи
 
 def fetch_audio(prompt_id):
-    """Достать готовый файл: в истории лежат имена, сам файл отдаётся по /view."""
+    """Достать готовые файлы: в истории лежат имена, сами файлы отдаются по /view.
+    Их несколько — по одному на каждый формат сохранения."""
     hist = api(f"/history/{prompt_id}")
     entry = hist.get(prompt_id) or {}
+    out = []
     for node_out in (entry.get("outputs") or {}).values():
         for key in ("audio", "audios"):
             for item in (node_out.get(key) or []):
@@ -162,8 +171,8 @@ def fetch_audio(prompt_id):
                      f"&subfolder={urllib.parse.quote(item.get('subfolder',''))}"
                      f"&type={urllib.parse.quote(item.get('type','output'))}")
                 with urllib.request.urlopen(ENGINE_URL + q, timeout=120) as r:
-                    return item["filename"], r.read()
-    return None, None
+                    out.append((item["filename"], r.read()))
+    return out
 
 
 def track(job_id, prompt_id, kind, label):
@@ -193,13 +202,18 @@ def track(job_id, prompt_id, kind, label):
                         log(tr(CONSOLE_LANG, "c_scan_done").format(id=job_id, n=j["took"]))
                         return
                 else:
-                    name, blob = fetch_audio(prompt_id)
-                    if blob:
+                    got = fetch_audio(prompt_id)
+                    if got:
                         out = HERE / "songs"; out.mkdir(exist_ok=True)
-                        ext = (name or "x.flac").rsplit(".", 1)[-1]
-                        path = out / f"{job_id}.{ext}"
-                        path.write_bytes(blob)
-                        j.update(state="done", file=f"/songs/{path.name}",
+                        files = {}
+                        for name, blob in got:
+                            ext = (name or "x.flac").rsplit(".", 1)[-1].lower()
+                            path = out / f"{job_id}.{ext}"
+                            path.write_bytes(blob)
+                            files[ext] = f"/songs/{path.name}"
+                        # Играем mp3: он открывается в любом браузере и весит меньше.
+                        j.update(state="done", files=files,
+                                 file=files.get("mp3") or next(iter(files.values())),
                                  took=round(time.time() - t0))
                         log(tr(CONSOLE_LANG, "c_song_done").format(id=job_id, n=j["took"]))
                         return

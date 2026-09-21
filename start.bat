@@ -176,7 +176,10 @@ if not exist "engine\main.py" (
     echo   !M_GITERR!
     pause & exit /b 1
   )
-  git clone --depth 1 https://github.com/comfyanonymous/ComfyUI engine
+  rem Версия закреплена. Мы клонировали master и на нём всё измерили, но master
+  rem меняется каждый день: завтра у нового человека соберётся другой движок,
+  rem которого никто не проверял. Поднимаем метку, когда проверим новую.
+  git clone --depth 1 --branch v0.37.0 https://github.com/comfyanonymous/ComfyUI engine
   if errorlevel 1 ( echo   !M_ENGERR! & pause & exit /b 1 )
 ) else ( echo   !M_ENGOK! )
 

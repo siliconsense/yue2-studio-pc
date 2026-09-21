@@ -42,12 +42,27 @@
     border-radius:6px;padding:9px 14px;font:13px inherit;cursor:pointer}
   .status{margin-top:12px;font:13px var(--fm);color:var(--silver);min-height:20px}
   .status.bad{color:#ff8b6b}
-  audio{width:100%;margin-top:10px}
   .hint{font-size:12px;color:var(--muted);margin-top:6px}
   .drop{border:1px dashed var(--line2);border-radius:8px;padding:22px;text-align:center;
     color:var(--silver);cursor:pointer}
   .drop:hover{border-color:var(--accent)}
   .hidden{display:none}
+  .player{display:flex;gap:12px;align-items:center;margin-top:12px;padding:10px 12px;
+    background:var(--ash);border:1px solid var(--line);border-radius:9px}
+  .pplay{flex:none;width:42px;height:42px;border-radius:50%;border:0;cursor:pointer;
+    background:var(--accent);color:var(--on-accent);font-size:15px;line-height:1;
+    display:flex;align-items:center;justify-content:center}
+  .pplay:hover{filter:brightness(1.08)}
+  .pmid{flex:1;min-width:0}
+  .ptop{display:flex;justify-content:space-between;gap:10px;margin-bottom:5px}
+  .pname{font-size:12px;color:var(--silver);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ptime{font:12px var(--fm);color:var(--muted);flex:none}
+  .pwave{display:block;width:100%;height:44px;cursor:pointer}
+  .pdl{display:flex;gap:6px;flex:none}
+  .pdl a{background:var(--smoke);color:var(--snow);border:1px solid var(--line2);
+    border-radius:6px;padding:7px 11px;font:600 12px inherit;text-decoration:none}
+  .pdl a:hover{border-color:var(--accent);color:var(--accent)}
+  @media(max-width:640px){.player{flex-wrap:wrap}.pdl{width:100%}.pdl a{flex:1;text-align:center}}
   .head{display:flex;align-items:flex-start;gap:12px}
   .head .grow{flex:1;min-width:0}
   .lang{display:flex;gap:4px;flex:none}
@@ -97,7 +112,7 @@
       </div>
       <div class="hint" data-i18n="hint_time"></div>
       <div class="status" id="st-song"></div>
-      <audio id="pl-song" controls class="hidden"></audio>
+      <div class="player hidden" id="res-song"></div>
     </div>
   </div>
 
@@ -136,7 +151,7 @@
         <button class="go" id="go-cover" data-i18n="btn_cover"></button>
       </div>
       <div class="status" id="st-cover"></div>
-      <audio id="pl-cover" controls class="hidden"></audio>
+      <div class="player hidden" id="res-cover"></div>
     </div>
   </div>
 </div>
@@ -180,6 +195,8 @@ const L = {
     done:'готово за %t с', scan_done:'партитура снята за %t с',
     failed:'не получилось', refused:'сервер отказал',
     page_err:'Ошибка на странице: ', mb:'МБ',
+    res_song:'Готовая песня', res_cover:'Готовый кавер',
+    play:'слушать', pause:'пауза',
     ex_style:'Russian, folk rock ballad, warm male tenor, acoustic guitar, upright bass, brushed drums, 88 BPM',
     ex_lyrics:'[Verse]\nГород спит на дне сентября\nФонари тонут в тишине\n\n[Chorus]\nНе гасни, останься со мной\nЯ держу твоё имя в горсти',
     ex_cstyle:'Russian, upbeat indie pop, warm female vocals, bright electric guitars, groovy bass, 96 BPM',
@@ -213,6 +230,8 @@ const L = {
     done:'done in %t s', scan_done:'melody transcribed in %t s',
     failed:'it did not work', refused:'the server refused the request',
     page_err:'Page error: ', mb:'MB',
+    res_song:'Your song', res_cover:'Your cover',
+    play:'play', pause:'pause',
     ex_style:'English, folk rock ballad, warm male tenor, acoustic guitar, upright bass, brushed drums, 88 BPM',
     ex_lyrics:'[Verse]\nThe city sleeps at the bottom of September\nStreetlights are drowning in the quiet\n\n[Chorus]\nDo not go out, stay here with me\nI hold your name in my hands',
     ex_cstyle:'English, upbeat indie pop, warm female vocals, bright electric guitars, groovy bass, 96 BPM',
@@ -252,6 +271,7 @@ function setLang(v){
   lang = v;
   try { localStorage.setItem(LANG_KEY, v); } catch(e){}
   applyLang();
+  for (const k in RES){ if (RES[k]) mountPlayer($(k === 'cover' ? '#res-cover' : '#res-song'), RES[k]); }
   // Пианоролл рисует свои подписи при монтировании — пересобираем, если он уже на экране.
   if (HAS_ROLL && window.__prState && !$('#pane-roll').classList.contains('hidden')){
     try { PR.mount($('#roll'), window.__prState, () => {}); } catch(e){}
@@ -313,6 +333,118 @@ async function post(url, body, headers){
   return j;
 }
 
+/* ---------- плеер результата ----------
+   Свой, а не стандартный audio controls: у браузеров он выглядит по-разному и
+   всегда чужеродно. Волна рисуется по реальным пикам файла, клик по ней
+   перематывает. Если декодировать не вышло — остаётся ровная полоса, перемотка
+   работает всё равно. */
+const RES = {song:null, cover:null};
+
+function fmtTime(sec){
+  if (!isFinite(sec)) return '0:00';
+  const m = Math.floor(sec/60), s = Math.floor(sec%60);
+  return m + ':' + String(s).padStart(2,'0');
+}
+
+async function peaks(url, buckets){
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  const buf = await (await fetch(url)).arrayBuffer();
+  const ctx = new Ctx();
+  try {
+    const audio = await ctx.decodeAudioData(buf);
+    const ch = audio.getChannelData(0);
+    const step = Math.floor(ch.length / buckets) || 1;
+    const out = new Float32Array(buckets);
+    for (let i = 0; i < buckets; i++){
+      let peak = 0;
+      const from = i*step, to = Math.min(ch.length, from+step);
+      for (let k = from; k < to; k++){ const v = Math.abs(ch[k]); if (v > peak) peak = v; }
+      out[i] = peak;
+    }
+    const max = Math.max(...out) || 1;
+    for (let i = 0; i < buckets; i++) out[i] /= max;
+    return out;
+  } finally { try { ctx.close(); } catch(e){} }
+}
+
+function mountPlayer(host, data){
+  const title = t(data.kind === 'cover' ? 'res_cover' : 'res_song');
+  const files = data.files || {};
+  const links = ['mp3','flac'].filter(k => files[k])
+    .map(k => `<a href="${files[k]}" download>${k.toUpperCase()}</a>`).join('');
+  host.innerHTML = `
+    <button class="pplay" type="button" title="${t('play')}">&#9654;</button>
+    <div class="pmid">
+      <div class="ptop"><span class="pname"></span><span class="ptime">0:00</span></div>
+      <canvas class="pwave"></canvas>
+    </div>
+    <div class="pdl">${links}</div>`;
+  host.querySelector('.pname').textContent = title;
+  host.classList.remove('hidden');
+
+  const btn = host.querySelector('.pplay');
+  const cv  = host.querySelector('.pwave');
+  const tm  = host.querySelector('.ptime');
+  const src = data.play;
+
+  // Один звук на плеер. Пересоздаём при перемонтировании, иначе после смены
+  // языка играли бы две копии сразу.
+  if (data.audio) { try { data.audio.pause(); } catch(e){} }
+  const au = data.audio = new Audio(src);
+  au.preload = 'metadata';
+
+  let bars = data.bars || null, prog = 0;
+  function draw(){
+    const w = cv.clientWidth || 600, h = 44, dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr);
+    const g = cv.getContext('2d'); g.scale(dpr, dpr); g.clearRect(0,0,w,h);
+    const cs = getComputedStyle(document.body);
+    const done = (cs.getPropertyValue('--accent')||'#5ad1ff').trim();
+    const rest = (cs.getPropertyValue('--line2')||'#2e3442').trim();
+    const bw = 3, gap = 1, n = Math.max(1, Math.floor(w/(bw+gap)));
+    for (let i = 0; i < n; i++){
+      const v = bars ? bars[Math.floor(i*bars.length/n)] : 0.35;
+      const bh = Math.max(2, v*(h-6));
+      g.fillStyle = (i/n <= prog) ? done : rest;
+      g.fillRect(i*(bw+gap), (h-bh)/2, bw, bh);
+    }
+  }
+  draw();
+  if (!bars){
+    peaks(src, 400).then(b => { if (b){ data.bars = bars = b; draw(); } }).catch(() => {});
+  }
+
+  function tick(){
+    const d = au.duration;
+    prog = (d && isFinite(d)) ? au.currentTime/d : 0;
+    tm.textContent = fmtTime(au.currentTime) + (d && isFinite(d) ? ' / ' + fmtTime(d) : '');
+    draw();
+  }
+  au.addEventListener('loadedmetadata', tick);
+  au.addEventListener('timeupdate', tick);
+  au.addEventListener('ended', () => { btn.innerHTML = '&#9654;'; prog = 0; draw(); });
+  btn.onclick = () => {
+    if (au.paused){ au.play(); btn.innerHTML = '&#10074;&#10074;'; btn.title = t('pause'); }
+    else { au.pause(); btn.innerHTML = '&#9654;'; btn.title = t('play'); }
+  };
+  cv.onclick = e => {
+    const r = cv.getBoundingClientRect();
+    const d = au.duration;
+    if (d && isFinite(d)) { au.currentTime = Math.max(0, Math.min(1, (e.clientX-r.left)/r.width)) * d; tick(); }
+  };
+  window.addEventListener('resize', draw);
+}
+
+function showResult(kind, r){
+  const host = $(kind === 'cover' ? '#res-cover' : '#res-song');
+  const files = {};
+  for (const k in (r.files || {})) files[k] = r.files[k] + '?t=' + Date.now();
+  const play = (files.mp3 || files.flac || (r.file + '?t=' + Date.now()));
+  RES[kind] = {kind: kind, files: files, play: play, bars: null, audio: null};
+  mountPlayer(host, RES[kind]);
+}
+
 /* ---------- песня ---------- */
 $('#go-song').onclick = async () => {
   const st = $('#st-song');
@@ -324,7 +456,7 @@ $('#go-song').onclick = async () => {
       cfg_scale: $('#cfg').value ? parseFloat($('#cfg').value) : null});
     watch(j.id, st, r => {
       st.textContent = t('done').replace('%t', r.took);
-      const p = $('#pl-song'); p.src = r.file + '?t=' + Date.now(); p.classList.remove('hidden');
+      showResult('song', r);
       $('#go-song').disabled = false;
     });
   } catch(e){ st.textContent = e.message; st.classList.add('bad'); $('#go-song').disabled = false; }
@@ -384,7 +516,7 @@ $('#go-cover').onclick = async () => {
       cfg_scale: $('#c-cfg').value ? parseFloat($('#c-cfg').value) : null});
     watch(j.id, st, r => {
       st.textContent = t('done').replace('%t', r.took);
-      const p = $('#pl-cover'); p.src = r.file + '?t=' + Date.now(); p.classList.remove('hidden');
+      showResult('cover', r);
       $('#go-cover').disabled = false;
     });
   } catch(e){ st.textContent = e.message; st.classList.add('bad'); $('#go-cover').disabled = false; }
