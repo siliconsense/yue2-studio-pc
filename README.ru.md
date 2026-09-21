@@ -6,6 +6,8 @@
 
 English: **[README.md](README.md)**
 
+![Студия](docs/studio.jpg)
+
 ## Что нужно
 
 - Windows 10 или 11
@@ -51,6 +53,8 @@ English: **[README.md](README.md)**
 
 **Кавер из записи.** Даёте аудиофайл, с него снимается мелодия, вы правите ноты
 мышкой в пианоролле, и модель поёт по этой мелодии *ваш* текст.
+
+![Вкладка кавера](docs/cover.jpg)
 
 Редактор — [pianoroll.js](https://github.com/siliconsense/pianoroll.js), наша
 библиотека без зависимостей.

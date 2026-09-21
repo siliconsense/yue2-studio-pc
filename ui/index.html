@@ -46,7 +46,9 @@
   .drop{border:1px dashed var(--line2);border-radius:8px;padding:22px;text-align:center;
     color:var(--silver);cursor:pointer}
   .drop:hover{border-color:var(--accent)}
-  .hidden{display:none}
+  /* !important обязателен: .player ниже по файлу и с той же силой селектора,
+     без него пустая рамка плеера видна до первого результата. */
+  .hidden{display:none!important}
   .player{display:flex;gap:12px;align-items:center;margin-top:12px;padding:10px 12px;
     background:var(--ash);border:1px solid var(--line);border-radius:9px}
   .pplay{flex:none;width:42px;height:42px;border-radius:50%;border:0;cursor:pointer;

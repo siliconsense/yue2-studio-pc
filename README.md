@@ -6,6 +6,8 @@ everything and opens the studio in your browser.
 
 Русская версия: **[README.ru.md](README.ru.md)**
 
+![The studio](docs/studio.jpg)
+
 ## What you need
 
 - Windows 10 or 11
@@ -53,6 +55,8 @@ is faster.
 **Cover from a recording.** You give it an audio file; the melody is transcribed
 from it into a score, you correct the notes with the mouse in the piano roll, and
 the model sings *your* lyrics to that melody.
+
+![The cover tab](docs/cover.jpg)
 
 The editor is [pianoroll.js](https://github.com/siliconsense/pianoroll.js), our
 dependency-free score editor.
