@@ -87,10 +87,13 @@ SAMPLER = dict(steps=32, cfg=1, sampler_name="dpm_2", scheduler="sgm_uniform", d
 
 
 
-def graph_song(style, lyrics, abc, seed, seconds, cfg_scale=None):
+def graph_song(style, lyrics, abc, seed, seconds, cfg_scale=None, with_chords=False):
     """Текст -> песня. Если подана партитура, режим меняется на «по мелодии»:
     именно так делает официальная схема каверов."""
-    mode = "melody" if abc.strip() else "full"
+    # melody — модель ведёт только вокальную линию, аккомпанемент сочиняет свой.
+    # full — партитура несёт ещё и аккорды в кавычках, и гармония оригинала
+    # переносится в кавер. Режим обязан совпадать с тем, которым снимали.
+    mode = ("full" if with_chords else "melody") if abc.strip() else "full"
     # Значения сэмплирования совпадают с официальным шаблоном кавера Comfy-Org
     # (audio_yue2_music_cover.json). Трогать их не нужно: мы это проверили и получили
     # шипение. Кавер разваливается не из-за них, а из-за несовпадения числа нот
@@ -360,7 +363,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._json(400, {"error": tr(lang, "need_both")})
             g = graph_song(style, lyrics, (d.get("abc") or "").strip(),
                            int(d.get("seed") or 0) or int(time.time()) % 100000,
-                           float(d.get("seconds") or 120), d.get("cfg_scale"))
+                           float(d.get("seconds") or 120), d.get("cfg_scale"),
+                           bool(d.get("with_chords")))
             return self._json(200, {"id": start_job("song", g, lang)})
 
         if self.path == "/api/scan":
@@ -374,7 +378,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 uploaded = upload_audio(name, raw)
             except Exception as e:
                 return self._json(500, {"error": tr(lang, "file_refused") + str(e)})
-            g = graph_scan(uploaded, "melody")
+            # Режим приходит заголовком: тело запроса занято самим файлом.
+            want = (self.headers.get("X-Mode") or "melody").strip().lower()
+            g = graph_scan(uploaded, "full" if want == "full" else "melody")
             return self._json(200, {"id": start_job("scan", g, lang)})
 
         return self._json(404, {"error": tr(pick_lang(self.headers.get("X-Lang")), "no_route")})
@@ -384,7 +390,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # страницы не в той папке (наступали).
         if self.path in ("/", "") or self.path.startswith("/?"):
             self.send_response(302)
-            self.send_header("Location", "/ui/index.html")
+            try:
+                v = int((HERE / "ui" / "index.html").stat().st_mtime)
+            except Exception:
+                v = 0
+            # Версия в адресе меняется вместе с файлом, поэтому после обновления
+            # браузер обязан перезапросить страницу, а не показать своё старое.
+            self.send_header("Location", f"/ui/index.html?v={v}")
             self.end_headers()
             return
         if self.path.startswith("/api/status/"):

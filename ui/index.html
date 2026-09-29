@@ -125,9 +125,16 @@
       <div class="drop" id="drop" data-i18n="drop"></div>
       <input type="file" id="file" accept="audio/*" class="hidden">
       <div class="row">
+        <label><span data-i18n="lbl_what"></span>
+          <select id="c-what">
+            <option value="melody" selected data-i18n="what_melody"></option>
+            <option value="full" data-i18n="what_full"></option>
+          </select></label>
+        <span style="flex:1"></span>
         <button class="ghost" id="go-scan" disabled data-i18n="btn_scan"></button>
         <span class="status" id="st-scan" style="margin:0"></span>
       </div>
+      <div class="s" data-i18n="hint_what" style="margin-top:6px"></div>
     </div>
 
     <div class="pane hidden" id="pane-roll">
@@ -194,6 +201,9 @@ const L = {
     lbl_source:'Исходная запись <span class="s">mp3, wav или flac</span>',
     drop:'Перетащите файл сюда или щёлкните, чтобы выбрать',
     btn_scan:'Снять партитуру',
+    lbl_what:'что снимать',
+    what_melody:'только мелодию', what_full:'мелодию и аккорды',
+    hint_what:'«Только мелодию» — модель споёт вашу мелодию, а аккомпанемент сочинит свой. «Мелодию и аккорды» — в партитуру попадёт и гармония оригинала, и кавер пойдёт по ней. Режим пения выбирается автоматически под то, что вы сняли.',
     lbl_melody:'Мелодия <span class="s">ноты можно двигать мышкой, прежде чем петь</span>',
     btn_fit:'Подогнать мелодию под текст',
     hint_fit:'Кавер разваливается, когда в музыкальной фразе нот больше или меньше, чем слогов в строке: модель заполняет разрыв словами, которых нет. Подгонка сливает лишние ноты и делит длинные, сохраняя рисунок мелодии.',
@@ -233,6 +243,9 @@ const L = {
     lbl_source:'Source recording <span class="s">mp3, wav or flac</span>',
     drop:'Drop a file here, or click to choose one',
     btn_scan:'Transcribe the melody',
+    lbl_what:'transcribe',
+    what_melody:'melody only', what_full:'melody and chords',
+    hint_what:'“Melody only” — the model sings your tune and invents its own accompaniment. “Melody and chords” — the score carries the original harmony as well, and the cover follows it. The singing mode matches whatever you transcribed.',
     lbl_melody:'Melody <span class="s">drag the notes with the mouse before singing</span>',
     btn_fit:'Fit the melody to the lyrics',
     hint_fit:'A cover falls apart when a phrase has more or fewer notes than the line has syllables: the model fills the gap with words that do not exist. Fitting merges surplus notes and splits long ones, keeping the shape of the tune.',
@@ -499,6 +512,7 @@ $('#go-scan').onclick = async () => {
     const buf = await picked.arrayBuffer();
     const j = await post('/api/scan', buf, {'Content-Type':'application/octet-stream',
                                             'X-Lang': lang,
+                                            'X-Mode': ($('#c-what') ? $('#c-what').value : 'melody'),
                                             'X-Filename': encodeURIComponent(picked.name)});
     watch(j.id, st, r => {
       st.textContent = t('scan_done').replace('%t', r.took);
@@ -539,6 +553,7 @@ $('#go-cover').onclick = async () => {
     if (HAS_ROLL && window.__prState) { try { abc = PR.build(window.__prState); } catch(e){} }
     const j = await post('/api/generate', {
       style: $('#c-style').value.trim(), lyrics: $('#c-lyrics').value.trim(), abc: abc, lang: lang,
+      with_chords: ($('#c-what') && $('#c-what').value === 'full'),
       cfg_scale: $('#c-cfg').value ? parseFloat($('#c-cfg').value) : null});
     watch(j.id, st, r => {
       st.textContent = t('done').replace('%t', r.took);
