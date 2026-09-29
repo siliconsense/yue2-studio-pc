@@ -133,6 +133,11 @@
     <div class="pane hidden" id="pane-roll">
       <label data-i18n="lbl_melody"></label>
       <div id="roll"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="ghost" id="go-fit" data-i18n="btn_fit"></button>
+        <span class="status" id="st-fit" style="margin:0"></span>
+      </div>
+      <div class="s" data-i18n="hint_fit" style="margin-top:6px"></div>
     </div>
 
     <div class="pane hidden" id="pane-sing">
@@ -182,7 +187,7 @@ const L = {
     hint_neg:'Отрицания работают: «no guitar» уберёт гитару.',
     lbl_lyrics:'Текст <span class="s">с тегами секций</span>',
     lbl_seconds:'длина, с',
-    lbl_cfg:'сила стиля',
+    lbl_cfg:'сила стиля <span class="s">ведёт к стилю и словам, не к нотам</span>',
     cfg_off:'выкл.',
     btn_song:'Написать песню',
     hint_time:'Считается примерно столько же, сколько длится песня. На карте с 6 ГБ проверено до двух минут.',
@@ -190,6 +195,10 @@ const L = {
     drop:'Перетащите файл сюда или щёлкните, чтобы выбрать',
     btn_scan:'Снять партитуру',
     lbl_melody:'Мелодия <span class="s">ноты можно двигать мышкой, прежде чем петь</span>',
+    btn_fit:'Подогнать мелодию под текст',
+    hint_fit:'Кавер разваливается, когда в музыкальной фразе нот больше или меньше, чем слогов в строке: модель заполняет разрыв словами, которых нет. Подгонка сливает лишние ноты и делит длинные, сохраняя рисунок мелодии.',
+    fit_done:'подогнано: было %b нот, стало %a при %s слогах',
+    fit_need:'сначала впишите текст кавера',
     lbl_cstyle:'Стиль кавера',
     lbl_clyrics:'Текст <span class="s">свой, на эту мелодию</span>',
     btn_cover:'Спеть по этой партитуре',
@@ -217,7 +226,7 @@ const L = {
     hint_neg:'Negations work: “no guitar” removes the guitar.',
     lbl_lyrics:'Lyrics <span class="s">with section tags</span>',
     lbl_seconds:'length, s',
-    lbl_cfg:'style strength',
+    lbl_cfg:'style strength <span class="s">guides style and lyrics, not the notes</span>',
     cfg_off:'off',
     btn_song:'Write the song',
     hint_time:'Takes about as long as the song itself. Tested up to two minutes on a 6 GB card.',
@@ -225,6 +234,10 @@ const L = {
     drop:'Drop a file here, or click to choose one',
     btn_scan:'Transcribe the melody',
     lbl_melody:'Melody <span class="s">drag the notes with the mouse before singing</span>',
+    btn_fit:'Fit the melody to the lyrics',
+    hint_fit:'A cover falls apart when a phrase has more or fewer notes than the line has syllables: the model fills the gap with words that do not exist. Fitting merges surplus notes and splits long ones, keeping the shape of the tune.',
+    fit_done:'fitted: %b notes became %a for %s syllables',
+    fit_need:'write the cover lyrics first',
     lbl_cstyle:'Cover style',
     lbl_clyrics:'Lyrics <span class="s">your own, written to this melody</span>',
     btn_cover:'Sing this melody',
@@ -511,6 +524,17 @@ $('#go-cover').onclick = async () => {
   try {
     // Берём партитуру ИЗ РЕДАКТОРА, а не исходную: смысл всей затеи в том,
     // что человек её поправил.
+  $('#go-fit') && $('#go-fit').addEventListener('click', () => {
+    const st = $('#st-fit');
+    if (!HAS_ROLL || !window.__prState) return;
+    const lyr = $('#c-lyrics').value.trim();
+    if (!lyr) { st.textContent = t('fit_need'); return; }
+    const r = PR.fitToLyrics(window.__prState, lyr);
+    if (!r || r.ok === false) { st.textContent = (r && r.error) || t('failed'); return; }
+    try { PR.mount($('#roll'), window.__prState, () => {}); } catch(e){}
+    st.textContent = t('fit_done').replace('%b', r.before).replace('%a', r.after).replace('%s', r.syllables);
+  });
+
     let abc = score;
     if (HAS_ROLL && window.__prState) { try { abc = PR.build(window.__prState); } catch(e){} }
     const j = await post('/api/generate', {

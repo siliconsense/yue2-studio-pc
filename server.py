@@ -86,10 +86,15 @@ ENCODER = "sheetsage2_bf16.safetensors"
 SAMPLER = dict(steps=32, cfg=1, sampler_name="dpm_2", scheduler="sgm_uniform", denoise=1)
 
 
+
 def graph_song(style, lyrics, abc, seed, seconds, cfg_scale=None):
     """Текст -> песня. Если подана партитура, режим меняется на «по мелодии»:
     именно так делает официальная схема каверов."""
     mode = "melody" if abc.strip() else "full"
+    # Значения сэмплирования совпадают с официальным шаблоном кавера Comfy-Org
+    # (audio_yue2_music_cover.json). Трогать их не нужно: мы это проверили и получили
+    # шипение. Кавер разваливается не из-за них, а из-за несовпадения числа нот
+    # в музыкальной фразе и числа слогов в строке — подгонку делает интерфейс.
     gen = {"clip": ["1", 1], "style": style, "lyrics": lyrics, "abc": abc,
            "seed": seed, "mode": mode, "max_duration": float(seconds),
            "temperature": 1.0, "top_p": 0.95, "top_k": 100, "repetition_penalty": 1.2}
@@ -388,6 +393,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/gpu":
             return self._json(200, gpu_info())
         return super().do_GET()
+
+    def end_headers(self):
+        # Без этого браузер кэширует страницу «на своё усмотрение»: заголовков
+        # кэширования у SimpleHTTPRequestHandler нет, и после обновления студии
+        # человек видит старый интерфейс, пока не нажмёт Ctrl+F5. Наступали.
+        if not self.path.startswith("/api/"):
+            self.send_header("Cache-Control", "no-cache, must-revalidate")
+        super().end_headers()
 
 
 def gpu_info():
