@@ -79,6 +79,7 @@
     <div class="grow">
       <h1 data-i18n="title">SiliconSense Studio</h1>
       <p class="sub" data-i18n="sub"></p>
+      <p class="s" style="opacity:.7;margin-top:2px">v3 · <span data-i18n="ver_note"></span></p>
     </div>
     <div class="lang">
       <button id="lang-ru">RU</button><button id="lang-en">EN</button>
@@ -145,6 +146,7 @@
         <span class="status" id="st-fit" style="margin:0"></span>
       </div>
       <div class="s" data-i18n="hint_fit" style="margin-top:6px"></div>
+      <div class="s" data-i18n="hint_where" style="margin-top:8px;opacity:.75"></div>
     </div>
 
     <div class="pane hidden" id="pane-sing">
@@ -202,6 +204,8 @@ const L = {
     drop:'Перетащите файл сюда или щёлкните, чтобы выбрать',
     btn_scan:'Снять партитуру',
     lbl_what:'что снимать',
+    ver_note:'мелодия и аккорды · подгонка под текст',
+    hint_where:'Выбор «только мелодию / мелодию и аккорды» находится ВЫШЕ, рядом с кнопкой «Снять партитуру»: он влияет на снятие, поэтому выбирать нужно до него.',
     what_melody:'только мелодию', what_full:'мелодию и аккорды',
     hint_what:'«Только мелодию» — модель споёт вашу мелодию, а аккомпанемент сочинит свой. «Мелодию и аккорды» — в партитуру попадёт и гармония оригинала, и кавер пойдёт по ней. Режим пения выбирается автоматически под то, что вы сняли.',
     lbl_melody:'Мелодия <span class="s">ноты можно двигать мышкой, прежде чем петь</span>',
@@ -244,6 +248,8 @@ const L = {
     drop:'Drop a file here, or click to choose one',
     btn_scan:'Transcribe the melody',
     lbl_what:'transcribe',
+    ver_note:'melody and chords · fitting to lyrics',
+    hint_where:'The “melody only / melody and chords” choice is ABOVE, next to the Transcribe button: it affects the transcription, so pick it before transcribing.',
     what_melody:'melody only', what_full:'melody and chords',
     hint_what:'“Melody only” — the model sings your tune and invents its own accompaniment. “Melody and chords” — the score carries the original harmony as well, and the cover follows it. The singing mode matches whatever you transcribed.',
     lbl_melody:'Melody <span class="s">drag the notes with the mouse before singing</span>',

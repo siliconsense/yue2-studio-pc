@@ -58,6 +58,21 @@ the model sings *your* lyrics to that melody.
 
 ![The cover tab](docs/cover.jpg)
 
+**What to transcribe.** Next to the transcribe button you choose between *melody only*
+and *melody and chords*. In melody mode the model sings your tune and invents its own
+accompaniment; in full mode the score also carries the chords, so the cover follows the
+original harmony. The singing mode always matches whatever was transcribed.
+
+**Fit the melody to the lyrics.** A cover falls apart when a phrase has more or fewer
+notes than the line of lyrics has syllables: the model fills the gap with words that do
+not exist. The button under the piano roll merges surplus notes and splits long ones,
+keeping the shape of the tune, and reports how many notes it ended up with against the
+syllable count. Write the lyrics first, then fit, then sing.
+
+Generation settings match the official Comfy-Org cover template and are not exposed:
+narrowing the sampling produces noise, not a closer cover. Style strength guides style
+and lyrics rather than the notes, so leave it off for covers.
+
 The editor is [pianoroll.js](https://github.com/siliconsense/pianoroll.js), our
 dependency-free score editor.
 
