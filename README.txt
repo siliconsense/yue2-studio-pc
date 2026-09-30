@@ -28,25 +28,26 @@ WHAT IT DOES
   transcribed from it, you correct the notes with the mouse and sing
   your own lyrics to that melody.
 
-MAKING A COVER - THE ORDER MATTERS
+MAKING A COVER
 1. Pick the file, then next to the transcribe button choose WHAT to
    transcribe:
+   - "melody and chords" - the score carries the original harmony and the
+     cover follows it. Choose this for a recognisable cover;
    - "melody only" - the model sings your tune and invents its own
-     accompaniment;
-   - "melody and chords" - the score also carries the original harmony
-     and the cover follows it.
+     accompaniment.
    Choose BEFORE transcribing; the singing mode follows automatically.
 2. Transcribe the score.
 3. Write the cover lyrics.
-4. Press "Fit the melody to the lyrics" under the piano roll.
-   A cover falls apart when a phrase has more or fewer notes than the line
-   has syllables: the model fills the gap with words that do not exist.
-   Fitting merges surplus notes and splits long ones, keeping the shape of
-   the tune, and reports the note count against the syllable count.
+4. Leave style strength off.
 5. Sing.
 
-Leave style strength off for covers: it guides style and lyrics, not the
-notes.
+ABOUT THE "FIT THE MELODY TO THE LYRICS" BUTTON
+Do NOT press it if you want a cover that follows the original: it CHANGES
+the melody, merging surplus notes and splitting long ones to match the
+syllable count, and the original stops being recognisable.
+It helps in a different case: when you write your own lyrics whose lines
+differ a lot in length from the tune, and fitting the words matters more
+than keeping the original shape.
 
 HOW LONG IT TAKES
 About as long as the song itself. Measured on a laptop RTX 4050 with
