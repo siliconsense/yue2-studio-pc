@@ -63,11 +63,14 @@ and *melody and chords*. In melody mode the model sings your tune and invents it
 accompaniment; in full mode the score also carries the chords, so the cover follows the
 original harmony. The singing mode always matches whatever was transcribed.
 
-**Fit the melody to the lyrics.** A cover falls apart when a phrase has more or fewer
-notes than the line of lyrics has syllables: the model fills the gap with words that do
-not exist. The button under the piano roll merges surplus notes and splits long ones,
-keeping the shape of the tune, and reports how many notes it ended up with against the
-syllable count. Write the lyrics first, then fit, then sing.
+**Fit the melody to the lyrics.** Optional, and it **changes the melody**: the button
+under the piano roll merges surplus notes and splits long ones so their count matches the
+syllables. Leave it alone for a cover meant to follow the original — the tune stops being
+recognisable. It is there for the other case: your own lyrics whose lines differ a lot in
+length from the tune, where fitting the words matters more than keeping the original shape.
+
+The recipe that works for a cover: transcribe *melody and chords*, leave style strength
+off, sing.
 
 Generation settings match the official Comfy-Org cover template and are not exposed:
 narrowing the sampling produces noise, not a closer cover. Style strength guides style
