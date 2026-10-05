@@ -79,6 +79,41 @@ and lyrics rather than the notes, so leave it off for covers.
 The editor is [pianoroll.js](https://github.com/siliconsense/pianoroll.js), our
 dependency-free score editor.
 
+## Cover duration — v1.2.0
+
+The hidden 2:00 cap is removed. “Follow the score” uses the current edited
+score and tempo, adding 5 seconds for the ending. A 4:00 score therefore
+gets a 4:05 generation budget.
+
+“Set a manual limit” accepts 1–900 seconds. This is a maximum, not a promised
+output length: the model may finish earlier. The UI warns when the limit is
+shorter than the score. Scores that cannot be timed automatically, or exceed
+15 minutes including the ending allowance, require a manual choice or a
+shorter score; there is no silent fallback to two minutes.
+
+A result message distinguishes a duration cutoff from exhausted model
+context. Raising the duration alone cannot solve the latter: shorten the
+lyrics/score or split the song. This build does not automatically join parts.
+
+**Only two-minute generations were previously measured on an RTX 4050 6 GB.**
+Long-cover duration calculations, job construction and UI have automated
+coverage; actual 3–6 minute GPU generations were not benchmarked for this
+update. A longer score consumes model context and a longer output needs more
+memory. The 900-second engine limit does not guarantee a 15-minute song on
+every graphics card.
+
+## Updating an existing installation
+
+1. Close the studio and its console so the engine stops.
+2. Download the archive from the [latest release](https://github.com/siliconsense/yue2-studio-pc/releases/latest).
+3. Copy all contents of the archive's studio folder into your existing studio
+   folder, replacing files. Include `duration.py` and the `engine_nodes` folder.
+4. Keep `engine`, `.venv`, `tools` and `songs`. No model re-download or PyTorch
+   reinstallation is needed for this fix.
+5. Run `start.bat` and refresh the browser. The small generation-report node
+   is installed automatically at startup.
+
+
 ## How it works
 
 The batch file sets up an isolated Python environment with [uv](https://github.com/astral-sh/uv),

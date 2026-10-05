@@ -8,9 +8,10 @@ flash attention, которого в сборках PyTorch под Windows не�
 Без веб-фреймворков, только стандартная библиотека: лишняя зависимость на чужой
 машине — лишний повод не запуститься.
 """
-import http.server, json, os, socketserver, subprocess, sys, threading, time, traceback
+import http.server, json, os, shutil, socketserver, subprocess, sys, threading, time, traceback
 import urllib.error, urllib.parse, urllib.request, webbrowser
 from pathlib import Path
+from duration import generation_seconds, DurationError
 
 HERE = Path(__file__).resolve().parent
 UI = HERE / "ui"
@@ -30,11 +31,22 @@ def log(msg):
 
 # ---------------------------------------------------------------- движок
 
+def install_report_node():
+    source = HERE / "engine_nodes" / "studio_generation_info.py"
+    target = ENGINE / "custom_nodes" / "siliconsense_yue2_info.py"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if not target.exists() or target.read_bytes() != source.read_bytes():
+        temporary = target.with_suffix(".py.new")
+        shutil.copyfile(source, temporary)
+        temporary.replace(target)
+
+
 def engine_start():
     """Поднять движок без окна. Он пишет в наш же вывод, чтобы ошибки были видны."""
     global _engine
     if _engine and _engine.poll() is None:
         return
+    install_report_node()
     cmd = [sys.executable, "main.py",
            "--listen", "127.0.0.1", "--port", str(ENGINE_PORT),
            "--disable-auto-launch"]
@@ -106,8 +118,10 @@ def graph_song(style, lyrics, abc, seed, seconds, cfg_scale=None, with_chords=Fa
     return {
         "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": CKPT}},
         "2": {"class_type": "YuE2GenerateMusic", "inputs": gen},
-        # Длину задаёт не человек, а сама модель: выход 1 — сколько получилось секунд.
+        # Observe truncation metadata without changing the sampling graph.
+        "9": {"class_type": "SiliconSenseYuE2GenerationInfo", "inputs": {"conditioning": ["2", 0], "requested_seconds": float(seconds)}},
         "3": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["2", 0]}},
+        # Allocate the actual generated length, not the requested maximum.
         "4": {"class_type": "EmptyYuE2LatentAudio", "inputs": {"seconds": ["2", 1], "batch_size": 1}},
         "5": {"class_type": "KSampler", "inputs": dict(model=["1", 0], positive=["2", 0],
               negative=["3", 0], latent_image=["4", 0], seed=seed, **SAMPLER)},
@@ -183,6 +197,18 @@ def fetch_audio(prompt_id):
     return out
 
 
+def generation_info(entry):
+    texts = ((entry.get("outputs") or {}).get("9") or {}).get("text") or []
+    if texts:
+        try:
+            value = json.loads(texts[0])
+            if isinstance(value, dict) and "truncated" in value and "seconds" in value:
+                return value
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
 def track(job_id, prompt_id, kind, label):
     j = JOBS[job_id]
     lang = j.get("lang", "en")
@@ -219,6 +245,11 @@ def track(job_id, prompt_id, kind, label):
                             path = out / f"{job_id}.{ext}"
                             path.write_bytes(blob)
                             files[ext] = f"/songs/{path.name}"
+                        info = generation_info(entry)
+                        if info:
+                            j.update(info)
+                            if info.get("warning_code"):
+                                j["warning"] = tr(lang, info["warning_code"])
                         # Играем mp3: он открывается в любом браузере и весит меньше.
                         j.update(state="done", files=files,
                                  file=files.get("mp3") or next(iter(files.values())),
@@ -235,6 +266,12 @@ def track(job_id, prompt_id, kind, label):
 # простынями — самое частое переводим, остальное отдаём как есть.
 STR = {
     "ru": {
+        'bad_duration': 'Длина должна быть числом от 0,04 до 900 секунд.',
+        'score_duration': 'Не удалось рассчитать длину этой партитуры. Выберите длину вручную.',
+        'score_too_long': 'Партитура с запасом на окончание длиннее 15 минут. Сократите её или выберите ручной лимит.',
+        'duration_limit': 'Достигнут выбранный предел длительности. Окончание могло обрезаться; увеличьте лимит и повторите.',
+        'context_limit': 'Исчерпан контекст модели: текст и партитура оставили недостаточно места для всей песни. Одного увеличения длительности недостаточно — сократите входные данные или разделите песню.',
+
         "sec":          "с",
         "c_engine_go":  "[движок] запускаю…",
         "c_engine_ok":  "[движок] готов за {n} с",
@@ -263,6 +300,12 @@ STR = {
         "no_cuda":      "CUDA не найдена — видеокарта NVIDIA не видна",
     },
     "en": {
+        'bad_duration': 'Length must be a number between 0.04 and 900 seconds.',
+        'score_duration': 'Could not calculate this score’s duration. Choose a manual length.',
+        'score_too_long': 'The score plus ending allowance exceeds 15 minutes. Shorten it or choose a manual limit.',
+        'duration_limit': 'The selected duration limit was reached. The ending may be cut off; increase the limit and try again.',
+        'context_limit': 'The model context was exhausted: lyrics and score left too little room for the whole song. Increasing duration alone will not help; shorten the input or split the song.',
+
         "sec":          "s",
         "c_engine_go":  "[engine] starting…",
         "c_engine_ok":  "[engine] ready in {n} s",
@@ -356,14 +399,25 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 d = json.loads(raw or b"{}")
             except Exception:
                 return self._json(400, {"error": tr(lang, "bad_request")})
+            if not isinstance(d, dict):
+                return self._json(400, {"error": tr(lang, "bad_request")})
             lang = pick_lang(d.get("lang") or lang)
-            style = (d.get("style") or "").strip()
-            lyrics = (d.get("lyrics") or "").strip()
+            if not all(isinstance(d.get(k, ""), str) for k in ("style", "lyrics")):
+                return self._json(400, {"error": tr(lang, "bad_request")})
+            style = d.get("style", "").strip()
+            lyrics = d.get("lyrics", "").strip()
             if not style or not lyrics:
                 return self._json(400, {"error": tr(lang, "need_both")})
-            g = graph_song(style, lyrics, (d.get("abc") or "").strip(),
-                           int(d.get("seed") or 0) or int(time.time()) % 100000,
-                           float(d.get("seconds") or 120), d.get("cfg_scale"),
+            try:
+                abc = (d.get("abc") or "").strip()
+                seconds = generation_seconds(abc, d.get("seconds"))
+                seed = int(d.get("seed") or 0) or int(time.time()) % 100000
+                cfg = float(d["cfg_scale"]) if d.get("cfg_scale") else None
+            except DurationError as e:
+                return self._json(400, {"error": tr(lang, str(e))})
+            except (ValueError, TypeError, AttributeError, OverflowError):
+                return self._json(400, {"error": tr(lang, "bad_request")})
+            g = graph_song(style, lyrics, abc, seed, seconds, cfg,
                            bool(d.get("with_chords")))
             return self._json(200, {"id": start_job("song", g, lang)})
 
@@ -438,6 +492,7 @@ if __name__ == "__main__":
     engine_start()
     try:
         _schema = engine_wait()
+        need_nodes(_schema, ["YuE2GenerateMusic", "SiliconSenseYuE2GenerationInfo"])
     except Exception as e:
         log(f"[engine] {e}")
         input(tr(CONSOLE_LANG, "c_enter"))

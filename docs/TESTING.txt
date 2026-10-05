@@ -1,0 +1,23 @@
+YuE2 Studio v1.2.0 — verification
+
+Run from the repository root:
+  python -m unittest discover -s tests -v
+Python 3.12+ and Node.js are used by the tests. The application still has no
+new third-party Python dependencies.
+
+Browser check (development only):
+  npm install --prefix /tmp/yue2-browser-check playwright
+  PLAYWRIGHT_MODULE=/tmp/yue2-browser-check/node_modules/playwright node tests/browser.cjs
+Set CHROME_PATH to a local Chrome executable, or install Playwright Chromium.
+The browser fixture never loads models or sends audio to external services.
+
+Covered: automatic 4-minute score; tempo edits; manual budgets; multi-voice
+scores, rests, ties, chords, meter and tempo units; rejection of unsupported
+timing and invalid budgets; actual engine graph; result metadata and
+localized cutoff warnings; installation of the reporting node into an
+existing engine; existing song-mode defaults; source replacement; lyric-fit
+button before first generation; RU/EN UI. Sampling and model weights unchanged.
+
+GPU inference, Windows DLL loading and 3–6 minute memory use have not been
+benchmarked for this update. Prior 6 GB performance numbers describe the
+previous measured two-minute workload. No new long-form quality claim is made.

@@ -166,6 +166,16 @@
         <span style="flex:1"></span>
         <button class="go" id="go-cover" data-i18n="btn_cover"></button>
       </div>
+      <div class="row" style="margin-top:12px">
+        <label><span data-i18n="cover_length"></span>
+          <select id="c-duration-mode"><option value="auto" data-i18n="duration_auto"></option><option value="manual" data-i18n="duration_manual"></option></select>
+        </label>
+        <label id="c-seconds-label" class="hidden"><span data-i18n="lbl_seconds"></span>
+          <input id="c-seconds" type="number" min="1" max="900" step="1" value="240">
+        </label>
+      </div>
+      <div id="c-duration-info" class="s" aria-live="polite" style="margin-top:8px"></div>
+      <div class="s" data-i18n="duration_hint" style="margin-top:6px"></div>
       <div class="status" id="st-cover"></div>
       <div class="player hidden" id="res-cover"></div>
     </div>
@@ -184,6 +194,18 @@ if (HAS_ROLL){ PR.config.storageKey = 'siliconsense_pc_nudge'; }
    образец бесполезен. */
 const L = {
   ru: {
+    cover_length:'Длительность кавера',
+    duration_auto:'По партитуре',
+    duration_manual:'Задать предел вручную',
+    duration_hint:'Авто учитывает текущие ноты и темп и добавляет 5 секунд на окончание. Это верхний предел: модель может закончить раньше. Длинные каверы требуют больше памяти; на 6 ГБ ранее проверены только 2 минуты.',
+    duration_estimate:'Партитура: %s · предел генерации: %d',
+    duration_unknown:'Для этой партитуры длину рассчитать не удалось. Выберите ручной предел.',
+    duration_invalid:'Укажите предел от 1 до 900 секунд.',
+    duration_long:'Партитура с окончанием длиннее 15 минут. Сократите её или выберите ручной предел.',
+    duration_short:'Выбранный предел короче партитуры — кавер может оборваться.',
+    warning_duration_limit:'Достигнут предел длительности. Окончание могло обрезаться; увеличьте лимит и повторите.',
+    warning_context_limit:'Исчерпан контекст модели. Увеличение длительности не поможет: сократите текст или партитуру либо разделите песню.',
+
     title:'SiliconSense Студия',
     sub:'Всё считается на вашей видеокарте. В интернет ничего не уходит.',
     gpu_check:'проверяю видеокарту…',
@@ -228,6 +250,18 @@ const L = {
     ex_clyrics:'[Verse]\nПервая строчка вашего текста\nВторая строчка вашего текста'
   },
   en: {
+    cover_length:'Cover length',
+    duration_auto:'Follow the score',
+    duration_manual:'Set a manual limit',
+    duration_hint:'Auto follows the edited score and tempo, with 5 seconds for the ending. This is a maximum: the model may finish earlier. Longer covers need more memory; only 2 minutes have been tested on 6 GB so far.',
+    duration_estimate:'Score: %s · generation limit: %d',
+    duration_unknown:'Could not estimate this score. Choose a manual limit.',
+    duration_invalid:'Enter a limit between 1 and 900 seconds.',
+    duration_long:'The score plus ending exceeds 15 minutes. Shorten it or choose a manual limit.',
+    duration_short:'The selected limit is shorter than the score; the cover may be cut off.',
+    warning_duration_limit:'The duration limit was reached. The ending may be cut off; increase the limit and try again.',
+    warning_context_limit:'The model context was exhausted. A higher duration will not help: shorten the lyrics or score, or split the song.',
+
     title:'SiliconSense Studio',
     sub:'Everything runs on your own graphics card. Nothing leaves your computer.',
     gpu_check:'checking the graphics card…',
@@ -305,10 +339,11 @@ function setLang(v){
   lang = v;
   try { localStorage.setItem(LANG_KEY, v); } catch(e){}
   applyLang();
-  for (const k in RES){ if (RES[k]) mountPlayer($(k === 'cover' ? '#res-cover' : '#res-song'), RES[k]); }
+  for (const k in RES){ if (RES[k]) {mountPlayer($(k === 'cover' ? '#res-cover' : '#res-song'), RES[k]); renderWarning(k, RES[k].warning_code);} }
+  updateCoverDuration();
   // Пианоролл рисует свои подписи при монтировании — пересобираем, если он уже на экране.
   if (HAS_ROLL && window.__prState && !$('#pane-roll').classList.contains('hidden')){
-    try { PR.mount($('#roll'), window.__prState, () => {}); } catch(e){}
+    try { PR.mount($('#roll'), window.__prState, updateCoverDuration); } catch(e){}
   }
 }
 
@@ -346,12 +381,12 @@ $('#tab-cover').onclick = () => tab('cover');
 
 /* ---------- общее ожидание ---------- */
 function watch(id, statusEl, onDone){
-  const t = setInterval(async () => {
+  const timer = setInterval(async () => {
     let j;
     try { j = await (await fetch('/api/status/' + id)).json(); } catch(e){ return; }
-    if (j.state === 'done'){ clearInterval(t); statusEl.classList.remove('bad'); onDone(j); }
+    if (j.state === 'done'){ clearInterval(timer); statusEl.classList.remove('bad'); onDone(j); }
     else if (j.state === 'failed'){
-      clearInterval(t);
+      clearInterval(timer);
       statusEl.textContent = j.error || t('failed');
       statusEl.classList.add('bad');
       document.querySelectorAll('button.go, #go-scan').forEach(b => b.disabled = false);
@@ -470,13 +505,20 @@ function mountPlayer(host, data){
   window.addEventListener('resize', draw);
 }
 
+function renderWarning(kind, code){
+  const id = 'warning-' + kind;
+  let box = document.getElementById(id);
+  if (!box){ box = document.createElement('div'); box.id = id; box.className = 'status'; box.setAttribute('role','status'); $(kind === 'cover' ? '#res-cover' : '#res-song').after(box); }
+  box.textContent = ['duration_limit','context_limit'].includes(code) ? t('warning_' + code) : '';
+}
 function showResult(kind, r){
   const host = $(kind === 'cover' ? '#res-cover' : '#res-song');
   const files = {};
   for (const k in (r.files || {})) files[k] = r.files[k] + '?t=' + Date.now();
   const play = (files.mp3 || files.flac || (r.file + '?t=' + Date.now()));
-  RES[kind] = {kind: kind, files: files, play: play, bars: null, audio: null};
+  RES[kind] = {kind: kind, files: files, play: play, bars: null, audio: null, warning_code:r.warning_code};
   mountPlayer(host, RES[kind]);
+  renderWarning(kind, r.warning_code);
 }
 
 /* ---------- песня ---------- */
@@ -505,7 +547,8 @@ $('#file').onchange = e => take(e.target.files[0]);
 
 function take(f){
   if (!f) return;
-  picked = f;
+  picked = f; score = null; window.__prState = null;
+  $('#pane-roll').classList.add('hidden'); $('#pane-sing').classList.add('hidden');
   $('#drop').textContent = f.name + '  ' + Math.round(f.size/1048576*10)/10 + ' ' + t('mb');
   $('#go-scan').disabled = false;
 }
@@ -522,7 +565,7 @@ $('#go-scan').onclick = async () => {
                                             'X-Filename': encodeURIComponent(picked.name)});
     watch(j.id, st, r => {
       st.textContent = t('scan_done').replace('%t', r.took);
-      score = r.abc;
+      score = r.abc; window.__prState = null;
       $('#pane-roll').classList.remove('hidden');
       $('#pane-sing').classList.remove('hidden');
       if (HAS_ROLL){
@@ -530,20 +573,35 @@ $('#go-scan').onclick = async () => {
           // Держим состояние редактора: именно из него берём партитуру при пении,
           // иначе правки мышкой никуда не попадут.
           window.__prState = PR.parse(score);
-          PR.mount($('#roll'), window.__prState, () => {});
+          PR.mount($('#roll'), window.__prState, updateCoverDuration);
         } catch(e){ console.warn('партитуру не разобрали', e); }
       }
+      updateCoverDuration();
       $('#go-scan').disabled = false;
     });
   } catch(e){ st.textContent = e.message; st.classList.add('bad'); $('#go-scan').disabled = false; }
 };
 
-$('#go-cover').onclick = async () => {
-  const st = $('#st-cover');
-  $('#go-cover').disabled = true; st.classList.remove('bad'); st.textContent = t('sending');
-  try {
-    // Берём партитуру ИЗ РЕДАКТОРА, а не исходную: смысл всей затеи в том,
-    // что человек её поправил.
+// The server recalculates from the submitted ABC; this preview follows the
+// editor's bar padding, so tempo and note edits update the displayed budget.
+function updateCoverDuration(){
+  const mode = $('#c-duration-mode');
+  if (!mode) return;
+  const manual = mode.value === 'manual';
+  $('#c-seconds-label').classList.toggle('hidden', !manual);
+  let estimate = null;
+  if (HAS_ROLL && window.__prState){
+    try {const parsed = PR.parse(PR.build(window.__prState)); estimate = parsed.bars * parsed.meter.num * 60 / parsed.tempo / (parsed.meter.den / 4);} catch(e){}
+  }
+  const limit = manual ? Number($('#c-seconds').value) : Math.ceil(estimate || 0) + 5;
+  const error = manual ? (!Number.isFinite(limit) || limit < 1 || limit > 900 ? t('duration_invalid') : '') :
+    (!estimate || !Number.isFinite(estimate) ? t('duration_unknown') : limit > 900 ? t('duration_long') : '');
+  $('#c-duration-info').textContent = error || t('duration_estimate').replace('%s', estimate ? fmtTime(estimate) : '—').replace('%d', fmtTime(limit)) +
+    (manual && estimate && limit < estimate ? ' · ' + t('duration_short') : '');
+  return {error, seconds:manual ? limit : 'auto'};
+}
+$('#c-duration-mode').onchange = updateCoverDuration;
+$('#c-seconds').oninput = updateCoverDuration;
   $('#go-fit') && $('#go-fit').addEventListener('click', () => {
     const st = $('#st-fit');
     if (!HAS_ROLL || !window.__prState) return;
@@ -551,14 +609,25 @@ $('#go-cover').onclick = async () => {
     if (!lyr) { st.textContent = t('fit_need'); return; }
     const r = PR.fitToLyrics(window.__prState, lyr);
     if (!r || r.ok === false) { st.textContent = (r && r.error) || t('failed'); return; }
-    try { PR.mount($('#roll'), window.__prState, () => {}); } catch(e){}
+    try { PR.mount($('#roll'), window.__prState, updateCoverDuration); } catch(e){}
+    updateCoverDuration();
     st.textContent = t('fit_done').replace('%b', r.before).replace('%a', r.after).replace('%s', r.syllables);
   });
 
+$('#go-cover').onclick = async () => {
+  const st = $('#st-cover');
+  $('#go-cover').disabled = true; st.classList.remove('bad'); st.textContent = t('sending');
+  try {
+    // Берём партитуру ИЗ РЕДАКТОРА, а не исходную: смысл всей затеи в том,
+    // что человек её поправил.
+
+
+    const duration = updateCoverDuration();
+    if (duration.error) throw new Error(duration.error);
     let abc = score;
     if (HAS_ROLL && window.__prState) { try { abc = PR.build(window.__prState); } catch(e){} }
     const j = await post('/api/generate', {
-      style: $('#c-style').value.trim(), lyrics: $('#c-lyrics').value.trim(), abc: abc, lang: lang,
+      style: $('#c-style').value.trim(), lyrics: $('#c-lyrics').value.trim(), abc: abc, lang: lang, seconds:duration.seconds,
       with_chords: ($('#c-what') && $('#c-what').value === 'full'),
       cfg_scale: $('#c-cfg').value ? parseFloat($('#c-cfg').value) : null});
     watch(j.id, st, r => {
