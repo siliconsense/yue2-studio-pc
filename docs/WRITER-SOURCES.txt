@@ -1,0 +1,18 @@
+LOCAL QWEN ASSISTANT — dependencies and provenance
+
+Feature request: https://github.com/siliconsense/yue2-studio-pc/issues/1
+Reference reviewed: https://github.com/pytraveler/YuE2-ComfyUI
+The studio writer and UI are implemented here; the full node pack is not installed.
+
+Runtime: official ggml-org/llama.cpp b11429 Windows x64 CUDA 12.4 binaries
+https://github.com/ggml-org/llama.cpp/releases/tag/b11429
+https://github.com/ggml-org/llama.cpp/blob/b11429/LICENSE
+https://github.com/ggml-org/llama.cpp/blob/b11429/tools/server/README.md
+
+Optional model weights: Unsloth GGUF quantizations of Qwen3.5
+https://huggingface.co/unsloth/Qwen3.5-4B-GGUF
+https://huggingface.co/unsloth/Qwen3.5-9B-GGUF
+Pinned repository revisions, byte sizes and SHA-256 hashes are in writer.py.
+No GGUF weights or runtime binaries are bundled in the studio ZIP. They are
+fetched from their upstream sources when the user starts the assistant.
+These optional dependencies do not change the YuE2 model licence.

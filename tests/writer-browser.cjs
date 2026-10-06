@@ -1,0 +1,57 @@
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const {spawn}=require('node:child_process');
+const assert=require('node:assert/strict');
+const readline=require('node:readline');
+(async()=>{
+ const fixture=spawn(process.env.PYTHON || 'python3',['tests/browser_server.py'],{stdio:['ignore','pipe','inherit']});
+ let browser;
+ try{
+  const port=await new Promise((resolve,reject)=>{
+   readline.createInterface({input:fixture.stdout}).once('line',x=>resolve(Number(x)));
+   fixture.once('exit',code=>reject(new Error('fixture exit '+code)));
+  });
+  browser=await chromium.launch({headless:true,...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})});
+  const page=await browser.newPage({viewport:{width:1280,height:1000},locale:'en-US'});
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('http://127.0.0.1:'+port+'/');
+  await page.locator('#style').fill('Existing custom style');
+  await page.locator('#lyrics').fill('Existing custom lyrics');
+  await page.locator('#tab-writer').click();
+  await page.locator('#w-go').click();assert.match(await page.locator('#w-status').innerText(),/3–2000/);
+  await page.locator('#w-idea').fill('A song about driving home');
+  await page.locator('#w-go').click();
+  await page.locator('#w-preview').waitFor({state:'visible'});
+  assert.equal(await page.locator('#lyrics').inputValue(),'Existing custom lyrics');
+  assert.match(await page.locator('#w-status').innerText(),/unloaded/);
+  await page.locator('#w-lyrics').fill('[Verse]\nMy edited draft\nA second line');
+  await page.locator('#w-apply').click();
+  assert.equal(await page.locator('#view-song').isVisible(),true);
+  assert.match(await page.locator('#lyrics').inputValue(),/My edited draft/);
+  await page.locator('#lang-ru').click();
+  assert.match(await page.locator('#lyrics').inputValue(),/My edited draft/);
+  await page.locator('#w-undo').click();
+  assert.equal(await page.locator('#lyrics').inputValue(),'Existing custom lyrics');
+  assert.equal(await page.locator('#style').inputValue(),'Existing custom style');
+  await page.locator('#tab-writer').click();
+  const downloaded=page.waitForEvent('download');await page.locator('#w-save').click();
+  assert.equal((await downloaded).suggestedFilename(),'Qwen-song-draft.txt');
+  await page.locator('#w-idea').fill('Cancel this idea');await page.locator('#w-go').click();
+  await page.locator('#w-cancel').waitFor({state:'visible'});await page.locator('#w-cancel').click();
+  await page.waitForFunction(()=>document.querySelector('#w-status').textContent.startsWith('Отменено.'));
+  assert.equal(await page.locator('#w-go').isDisabled(),false);
+  assert.match(await page.locator('#w-lyrics').inputValue(),/My edited draft/);
+  await page.locator('#w-idea').fill('FAIL fixture');await page.locator('#w-go').click();
+  await page.waitForFunction(()=>document.querySelector('#w-status').textContent.includes('Fixture writer failure'));
+  assert.equal(await page.locator('#w-go').isDisabled(),false);
+  await page.locator('#w-idea').fill('Recover after failure');await page.locator('#w-go').click();
+  await page.locator('#w-cancel').waitFor({state:'visible'});
+  await page.reload();await page.locator('#tab-writer').click();
+  await page.waitForFunction(()=>document.querySelector('#w-status').textContent.includes('Черновик готов'));
+  assert.match(await page.locator('#w-lyrics').inputValue(),/Мы возвращаемся/);
+  await page.screenshot({path:'/tmp/yue2-writer-ru.png',fullPage:true});
+  await page.locator('#lang-en').click();
+  assert.equal(await page.locator('#tab-writer').innerText(),'Idea → song');
+  assert.deepEqual(errors,[]);
+  console.log('PASS: writer RU/EN, validation, preview, explicit apply, undo, TXT, cancel, error recovery, active job recovery after reload. Fixture inference only.');
+ }finally{if(browser)await browser.close();fixture.kill();}
+})().catch(e=>{console.error(e);process.exitCode=1});

@@ -8,10 +8,11 @@ flash attention, которого в сборках PyTorch под Windows не�
 Без веб-фреймворков, только стандартная библиотека: лишняя зависимость на чужой
 машине — лишний повод не запуститься.
 """
-import http.server, json, os, shutil, socketserver, subprocess, sys, threading, time, traceback
+import http.server, json, os, shutil, socketserver, subprocess, sys, threading, time, traceback, uuid
+import writer
 import urllib.error, urllib.parse, urllib.request, webbrowser
 from pathlib import Path
-from duration import generation_seconds, DurationError
+from duration import generation_seconds, score_seconds, DurationError
 
 HERE = Path(__file__).resolve().parent
 UI = HERE / "ui"
@@ -23,6 +24,8 @@ ENGINE_URL = f"http://127.0.0.1:{ENGINE_PORT}"
 JOBS = {}
 _engine = None
 _schema = None
+GPU_LOCK = threading.Lock()
+WRITERS = {}
 
 
 def log(msg):
@@ -108,8 +111,8 @@ def graph_song(style, lyrics, abc, seed, seconds, cfg_scale=None, with_chords=Fa
     mode = ("full" if with_chords else "melody") if abc.strip() else "full"
     # Значения сэмплирования совпадают с официальным шаблоном кавера Comfy-Org
     # (audio_yue2_music_cover.json). Трогать их не нужно: мы это проверили и получили
-    # шипение. Кавер разваливается не из-за них, а из-за несовпадения числа нот
-    # в музыкальной фразе и числа слогов в строке — подгонку делает интерфейс.
+    # шипение. Число нот и слогов само по себе не гарантирует синхронизацию:
+    # модель не предоставляет принудительную привязку слогов к нотам.
     gen = {"clip": ["1", 1], "style": style, "lyrics": lyrics, "abc": abc,
            "seed": seed, "mode": mode, "max_duration": float(seconds),
            "temperature": 1.0, "top_p": 0.95, "top_k": 100, "repetition_penalty": 1.2}
@@ -232,7 +235,12 @@ def track(job_id, prompt_id, kind, label):
                 if kind == "scan":
                     abc = find_text(entry)
                     if abc:
-                        j.update(state="done", abc=abc, took=round(time.time() - t0))
+                        try:
+                            seconds = score_seconds(abc)
+                        except DurationError:
+                            seconds = None  # manual duration remains available
+                        j.update(state="done", abc=abc, score_seconds=seconds,
+                                 took=round(time.time() - t0))
                         log(tr(CONSOLE_LANG, "c_scan_done").format(id=job_id, n=j["took"]))
                         return
                 else:
@@ -357,21 +365,90 @@ def human_error(msg, lang="en"):
     return tr(lang, "engine_error") + msg[:400]
 
 
-def start_job(kind, graph, lang):
-    label = tr(lang, "song_label" if kind == "song" else "scan_label")
-    job_id = time.strftime("%H%M%S") + "-" + str(int(time.time() * 1000) % 1000)
-    JOBS[job_id] = {"state": "running", "message": label, "lang": lang}
-    try:
-        r = api("/prompt", {"prompt": graph})
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", "replace")[:400]
-        JOBS[job_id].update(state="failed", error=tr(lang, "not_accepted") + detail)
-        return job_id
-    pid = r.get("prompt_id")
-    if not pid:
-        JOBS[job_id].update(state="failed", error=tr(lang, "no_job_id"))
-        return job_id
-    threading.Thread(target=track, args=(job_id, pid, kind, label), daemon=True).start()
+class BusyError(RuntimeError):
+    pass
+
+
+def reserve_gpu():
+    if not GPU_LOCK.acquire(blocking=False):
+        raise BusyError('Another task is running. Wait or cancel the assistant / Уже идёт задача: дождитесь её или отмените помощника')
+
+
+def ensure_engine():
+    global _schema
+    if _engine is None or _engine.poll() is not None:
+        engine_start()
+        try:
+            _schema = engine_wait()
+            need_nodes(_schema, ['YuE2GenerateMusic', 'SiliconSenseYuE2GenerationInfo'])
+        except Exception:
+            stop_engine()
+            raise
+
+
+def stop_engine():
+    global _engine
+    # Only our own child process, never a process found by port/name.
+    writer.stop_process(_engine)
+    _engine = None
+
+
+def start_job(kind, graph, lang, source=None):
+    reserve_gpu()
+    label = tr(lang, 'song_label' if kind == 'song' else 'scan_label')
+    job_id = uuid.uuid4().hex[:16]
+    JOBS[job_id] = {'state': 'running', 'message': label, 'lang': lang}
+    def run():
+        try:
+            ensure_engine()
+            current = graph
+            if source is not None:
+                name, raw, mode = source
+                current = graph_scan(upload_audio(name, raw), mode)
+            r = api('/prompt', {'prompt': current})
+            pid = r.get('prompt_id')
+            if not pid:
+                raise RuntimeError(tr(lang, 'no_job_id'))
+            track(job_id, pid, kind, label)
+        except Exception as e:
+            JOBS[job_id].update(state='failed', error=human_error(str(e), lang))
+        finally:
+            GPU_LOCK.release()
+    threading.Thread(target=run, daemon=True).start()
+    return job_id
+
+
+WRITER_MESSAGES = {
+    'download': ('Скачивание', 'Downloading'), 'verify': ('Проверка файла', 'Verifying file'),
+    'retry': ('Повторное скачивание', 'Retrying download'), 'install': ('Установка', 'Installing'),
+    'release': ('Освобождаю видеопамять для Qwen', 'Releasing GPU memory for Qwen'),
+    'load': ('Загрузка Qwen', 'Loading Qwen'), 'write': ('Пишу текст и стиль…', 'Writing lyrics and style…'),
+}
+
+
+def start_writer(data, lang):
+    reserve_gpu()
+    job_id = uuid.uuid4().hex[:16]
+    assistant = writer.Assistant()
+    WRITERS[job_id] = assistant
+    JOBS[job_id] = {'state': 'running', 'message': 'Qwen…', 'kind': 'writer', 'lang': lang}
+    def report(stage, detail):
+        message = WRITER_MESSAGES[stage][0 if lang == 'ru' else 1]
+        JOBS[job_id].update(message=message + (' · ' + detail if detail else ''))
+    def run():
+        try:
+            draft = assistant.run(data, report, stop_engine)
+            writer.check_cancel(assistant.cancelled)
+            JOBS[job_id].update(state='done', **draft)
+        except Exception as e:
+            if assistant.cancelled.is_set() or isinstance(e, writer.Cancelled):
+                JOBS[job_id].update(state='cancelled')
+            else:
+                JOBS[job_id].update(state='failed', error=str(e)[:600])
+        finally:
+            WRITERS.pop(job_id, None)
+            GPU_LOCK.release()
+    threading.Thread(target=run, daemon=True).start()
     return job_id
 
 
@@ -391,8 +468,43 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        n = int(self.headers.get("Content-Length", 0))
+        try:
+            return self.handle_post()
+        except BusyError as e:
+            return self._json(409, {'error': str(e)})
+
+    def handle_post(self):
+        if self.path.startswith('/api/writer'):
+            origin = self.headers.get('Origin')
+            if origin and urllib.parse.urlparse(origin).netloc != self.headers.get('Host'):
+                return self._json(403, {'error': 'Local requests only'})
+            if self.headers.get_content_type() != 'application/json':
+                return self._json(415, {'error': 'JSON required'})
+        try:
+            n = int(self.headers.get('Content-Length', 0))
+            if n < 0:
+                raise ValueError()
+        except ValueError:
+            return self._json(400, {'error': 'Invalid content length'})
+        if self.path.startswith('/api/writer') and n > 16000:
+            return self._json(413, {'error': 'Request too large'})
         raw = self.rfile.read(n)
+        if self.path == '/api/writer':
+            try:
+                d = json.loads(raw)
+                data = writer.validate(d)
+            except (ValueError, TypeError):
+                return self._json(400, {'error': 'Check idea and assistant settings / Проверьте идею и настройки помощника'})
+            return self._json(200, {'id': start_writer(data, pick_lang(d.get('lang')))})
+        if self.path == '/api/writer/cancel':
+            try:
+                d = json.loads(raw)
+                assistant = WRITERS.get(d.get('id'))
+            except (ValueError, TypeError, AttributeError):
+                return self._json(400, {'error': 'Invalid request'})
+            if assistant:
+                assistant.cancel()
+            return self._json(200, {'ok': True})
         if self.path == "/api/generate":
             lang = pick_lang(self.headers.get("X-Lang"))
             try:
@@ -428,14 +540,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             name = urllib.parse.unquote(self.headers.get("X-Filename", "source.mp3"))
             if not raw:
                 return self._json(400, {"error": tr(lang, "empty_file")})
-            try:
-                uploaded = upload_audio(name, raw)
-            except Exception as e:
-                return self._json(500, {"error": tr(lang, "file_refused") + str(e)})
-            # Режим приходит заголовком: тело запроса занято самим файлом.
-            want = (self.headers.get("X-Mode") or "melody").strip().lower()
-            g = graph_scan(uploaded, "full" if want == "full" else "melody")
-            return self._json(200, {"id": start_job("scan", g, lang)})
+            want = (self.headers.get('X-Mode') or 'melody').strip().lower()
+            return self._json(200, {'id': start_job('scan', None, lang,
+                source=(name, raw, 'full' if want == 'full' else 'melody'))})
 
         return self._json(404, {"error": tr(pick_lang(self.headers.get("X-Lang")), "no_route")})
 
@@ -456,6 +563,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if self.path.startswith("/api/status/"):
             j = JOBS.get(self.path.rsplit("/", 1)[-1])
             return self._json(200 if j else 404, j or {"error": tr("en", "no_job")})
+        if self.path == '/api/writer/models':
+            models = []
+            for key, model in writer.MODELS.items():
+                path = HERE / 'engine' / 'models' / 'LLM' / model['file']
+                models.append({'id': key, 'name': model['name'], 'bytes': model['size'],
+                    'downloaded': path.exists() and path.stat().st_size == model['size']})
+            active = next(iter(WRITERS), None)
+            return self._json(200, {'models': models, 'active': active})
         if self.path == "/api/gpu":
             return self._json(200, gpu_info())
         return super().do_GET()
@@ -504,5 +619,6 @@ if __name__ == "__main__":
         with Server(("127.0.0.1", PORT), Handler) as httpd:
             httpd.serve_forever()
     finally:
-        if _engine and _engine.poll() is None:
-            _engine.terminate()
+        for assistant in list(WRITERS.values()):
+            assistant.cancel()
+        stop_engine()

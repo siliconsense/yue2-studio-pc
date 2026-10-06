@@ -1,23 +1,44 @@
-YuE2 Studio v1.2.0 — verification
+YuE2 Studio PC — v1.3.0 validation
 
-Run from the repository root:
-  python -m unittest discover -s tests -v
-Python 3.12+ and Node.js are used by the tests. The application still has no
-new third-party Python dependencies.
+AUTOMATED CHECKS
+python -m unittest discover -s tests -v
+Python 3.12+ and Node.js are used by the tests. The application has no new
+Python package dependencies.
 
-Browser check (development only):
-  npm install --prefix /tmp/yue2-browser-check playwright
-  PLAYWRIGHT_MODULE=/tmp/yue2-browser-check/node_modules/playwright node tests/browser.cjs
-Set CHROME_PATH to a local Chrome executable, or install Playwright Chromium.
-The browser fixture never loads models or sends audio to external services.
+Browser setup and commands:
+npm install --prefix /tmp/yue2-browser-check playwright
+PLAYWRIGHT_MODULE=/tmp/yue2-browser-check/node_modules/playwright node tests/browser.cjs
+PLAYWRIGHT_MODULE=/tmp/yue2-browser-check/node_modules/playwright node tests/writer-browser.cjs
+Set CHROME_PATH to an installed Chrome or install Playwright Chromium.
+The browser fixture does not load models or send audio to external services.
 
-Covered: automatic 4-minute score; tempo edits; manual budgets; multi-voice
-scores, rests, ties, chords, meter and tempo units; rejection of unsupported
-timing and invalid budgets; actual engine graph; result metadata and
-localized cutoff warnings; installation of the reporting node into an
-existing engine; existing song-mode defaults; source replacement; lyric-fit
-button before first generation; RU/EN UI. Sampling and model weights unchanged.
+23 Python tests cover duration, score metadata, writer input and schema,
+4-line sections and 8/16/24-line assembly, download resumption/range fallback,
+SHA validation, cancellation, safe archive paths, process cleanup, GPU-task
+exclusion, restart before music/scan upload, HTTP validation and origin checks.
+Browser suites cover original ABC preservation, manual tempo edits, duration
+limits, mode matching, original-score restoration, RU/EN, writer preview,
+apply/undo, TXT download, cancellation, failures and recovery after reload.
+Sampling and model weights for YuE2 are unchanged.
 
-GPU inference, Windows DLL loading and 3–6 minute memory use have not been
-benchmarked for this update. Prior 6 GB performance numbers describe the
-previous measured two-minute workload. No new long-form quality claim is made.
+REAL MODEL VALIDATION
+Qwen3.5-4B Q4_K_M was exercised on macOS arm64 with llama.cpp b11429 Metal,
+using the production prompt, structured-response schema and runner. RU and
+EN short drafts each had 8 sung lines. The Qwen process exited after each
+request. Example wall times including startup: RU 8.4 s, EN 7.5 s. These are
+Mac observations, not Windows benchmarks; the Windows installer was bypassed.
+
+USER-REPORTED PC VALIDATION — 2026-10-06
+The user ran both Qwen3.5-4B and 9B on a PC with 6 GB VRAM and 32 GB RAM.
+They confirmed the models work, unload/reload correctly, and music generation
+can be used afterwards. The exact GPU model, driver, memory peaks and per-model
+timings for this validation were not recorded. This is user-reported evidence,
+not an independent benchmark or a guarantee for all configurations.
+The same user confirmed that the cover vocal followed the score after the
+score-preservation fix on their example.
+
+LIMITS
+Earlier RTX 4050 6 GB music benchmarks cover two-minute generations only.
+No controlled 3–6 minute memory benchmark is claimed for this release.
+Edited complex ABC needs separate review: the editor handles a subset of ABC.
+Model adherence and lyric quality vary by input; generated drafts remain editable.

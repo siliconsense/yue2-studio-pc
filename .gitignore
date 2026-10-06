@@ -6,3 +6,6 @@ engine/
 songs/
 __pycache__/
 *.pyc
+
+# Local writing assistant diagnostics (not release assets)
+logs/

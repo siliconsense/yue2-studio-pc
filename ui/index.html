@@ -21,7 +21,7 @@
   .sub{color:var(--silver);font-size:13px;margin:0 0 14px}
   .gpu{font:12px var(--fm);color:var(--muted);margin-bottom:14px}
   .gpu b{color:var(--accent)}
-  .tabs{display:flex;gap:6px;margin-bottom:14px}
+  .tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
   .tabs button{background:var(--ash);color:var(--silver);border:1px solid var(--line);
     border-radius:7px;padding:8px 16px;font:600 13px inherit;cursor:pointer}
   .tabs button.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
@@ -79,7 +79,7 @@
     <div class="grow">
       <h1 data-i18n="title">SiliconSense Studio</h1>
       <p class="sub" data-i18n="sub"></p>
-      <p class="s" style="opacity:.7;margin-top:2px">v3 · <span data-i18n="ver_note"></span></p>
+      <p class="s" style="opacity:.7;margin-top:2px">v1.3.0 · <span data-i18n="ver_note"></span></p>
     </div>
     <div class="lang">
       <button id="lang-ru">RU</button><button id="lang-en">EN</button>
@@ -90,6 +90,40 @@
   <div class="tabs">
     <button id="tab-song" class="on" data-i18n="tab_song"></button>
     <button id="tab-cover" data-i18n="tab_cover"></button>
+    <button id="tab-writer" data-w="tab"></button>
+  </div>
+
+  <div id="view-writer" class="hidden">
+    <div class="pane">
+      <h2 data-w="heading" style="margin-top:0;font-size:20px"></h2>
+      <p class="s" data-w="intro"></p>
+      <div class="two">
+        <div><label for="w-idea" data-w="idea"></label><textarea id="w-idea" rows="4" maxlength="2000"></textarea></div>
+        <div><label for="w-genre" data-w="genre"></label><textarea id="w-genre" rows="4" maxlength="200"></textarea></div>
+      </div>
+      <div class="row" style="flex-wrap:wrap">
+        <label><span data-w="language"></span> <select id="w-language"><option value="ru">Русский</option><option value="en">English</option></select></label>
+        <label><span data-w="length"></span> <select id="w-length"><option value="short" data-w="short"></option><option value="medium" selected data-w="medium"></option><option value="long" data-w="long"></option></select></label>
+        <label><span data-w="model"></span> <select id="w-model"><option value="qwen-4b">Qwen3.5-4B · 2.55 GiB</option><option value="qwen-9b">Qwen3.5-9B · 5.29 GiB</option></select></label>
+        <label><span data-w="device"></span> <select id="w-device"><option value="auto" data-w="auto"></option><option value="cpu" data-w="cpu"></option></select></label>
+      </div>
+      <p class="s" data-w="download"></p>
+      <div class="s" id="w-model-status"></div>
+      <div class="row" style="margin-top:12px">
+        <button class="go" id="w-go" data-w="write"></button>
+        <button class="ghost hidden" id="w-cancel" data-w="cancel"></button>
+      </div>
+      <div id="w-status" class="status" role="status" aria-live="polite"></div>
+    </div>
+    <div id="w-preview" class="pane hidden">
+      <h2 data-w="preview" style="margin-top:0;font-size:18px"></h2>
+      <p class="s" data-w="preview_hint"></p>
+      <div class="two">
+        <div><label for="w-style" data-w="style"></label><textarea id="w-style" rows="6"></textarea></div>
+        <div><label for="w-lyrics" data-w="lyrics"></label><textarea id="w-lyrics" rows="14"></textarea></div>
+      </div>
+      <div class="row"><button class="go" id="w-apply" data-w="apply"></button><button class="ghost" id="w-save" data-w="save"></button></div>
+    </div>
   </div>
 
   <!-- ---------- песня ---------- -->
@@ -114,6 +148,7 @@
         <button class="go" id="go-song" data-i18n="btn_song"></button>
       </div>
       <div class="hint" data-i18n="hint_time"></div>
+      <button class="ghost hidden" id="w-undo" data-w="undo"></button>
       <div class="status" id="st-song"></div>
       <div class="player hidden" id="res-song"></div>
     </div>
@@ -142,6 +177,7 @@
       <label data-i18n="lbl_melody"></label>
       <div id="roll"></div>
       <div class="row" style="margin-top:10px">
+        <button class="ghost" id="restore-score" disabled data-i18n="btn_restore"></button>
         <button class="ghost" id="go-fit" style="opacity:.75" data-i18n="btn_fit"></button>
         <span class="status" id="st-fit" style="margin:0"></span>
       </div>
@@ -207,7 +243,7 @@ const L = {
     warning_context_limit:'Исчерпан контекст модели. Увеличение длительности не поможет: сократите текст или партитуру либо разделите песню.',
 
     title:'SiliconSense Студия',
-    sub:'Всё считается на вашей видеокарте. В интернет ничего не уходит.',
+    sub:'Музыка и тексты создаются на вашем ПК.',
     gpu_check:'проверяю видеокарту…',
     gpu_ok:'видеокарта: <b>%s</b>, %v ГБ',
     gpu_bad:'видеокарта не определилась: ',
@@ -226,11 +262,12 @@ const L = {
     drop:'Перетащите файл сюда или щёлкните, чтобы выбрать',
     btn_scan:'Снять партитуру',
     lbl_what:'что снимать',
-    ver_note:'мелодия и аккорды · подгонка под текст',
+    ver_note:'каверы · локальный помощник Qwen',
     hint_where:'Выбор «только мелодию / мелодию и аккорды» находится ВЫШЕ, рядом с кнопкой «Снять партитуру»: он влияет на снятие, поэтому выбирать нужно до него.',
     what_melody:'только мелодию', what_full:'мелодию и аккорды',
     hint_what:'«Только мелодию» — модель споёт вашу мелодию, а аккомпанемент сочинит свой. «Мелодию и аккорды» — в партитуру попадёт и гармония оригинала, и кавер пойдёт по ней. Режим пения выбирается автоматически под то, что вы сняли.',
     lbl_melody:'Мелодия <span class="s">ноты можно двигать мышкой, прежде чем петь</span>',
+    btn_restore:'Вернуть исходную партитуру',
     btn_fit:'Подогнать мелодию под текст',
     hint_fit:'Нажимать не нужно, если хотите кавер по оригиналу: подгонка МЕНЯЕТ мелодию — сливает лишние ноты и делит длинные под число слогов, и оригинал перестаёт узнаваться. Она для другого случая: свой текст, строки которого сильно расходятся с мелодией.',
     fit_done:'подогнано: было %b нот, стало %a при %s слогах',
@@ -263,7 +300,7 @@ const L = {
     warning_context_limit:'The model context was exhausted. A higher duration will not help: shorten the lyrics or score, or split the song.',
 
     title:'SiliconSense Studio',
-    sub:'Everything runs on your own graphics card. Nothing leaves your computer.',
+    sub:'Music and lyrics are created on your PC.',
     gpu_check:'checking the graphics card…',
     gpu_ok:'graphics card: <b>%s</b>, %v GB',
     gpu_bad:'graphics card not detected: ',
@@ -282,11 +319,12 @@ const L = {
     drop:'Drop a file here, or click to choose one',
     btn_scan:'Transcribe the melody',
     lbl_what:'transcribe',
-    ver_note:'melody and chords · fitting to lyrics',
+    ver_note:'covers · local Qwen assistant',
     hint_where:'The “melody only / melody and chords” choice is ABOVE, next to the Transcribe button: it affects the transcription, so pick it before transcribing.',
     what_melody:'melody only', what_full:'melody and chords',
     hint_what:'“Melody only” — the model sings your tune and invents its own accompaniment. “Melody and chords” — the score carries the original harmony as well, and the cover follows it. The singing mode matches whatever you transcribed.',
     lbl_melody:'Melody <span class="s">drag the notes with the mouse before singing</span>',
+    btn_restore:'Restore original score',
     btn_fit:'Fit the melody to the lyrics',
     hint_fit:'Leave it alone if you want a cover that follows the original: fitting CHANGES the melody, merging surplus notes and splitting long ones to match the syllables, and the original stops being recognisable. It is for the other case: your own lyrics whose lines differ a lot from the tune.',
     fit_done:'fitted: %b notes became %a for %s syllables',
@@ -371,11 +409,12 @@ applyLang();
 
 /* ---------- вкладки ---------- */
 function tab(which){
-  $('#tab-song').classList.toggle('on', which === 'song');
-  $('#tab-cover').classList.toggle('on', which === 'cover');
-  $('#view-song').classList.toggle('hidden', which !== 'song');
-  $('#view-cover').classList.toggle('hidden', which !== 'cover');
+  for (const name of ['song', 'cover', 'writer']){
+    $('#tab-' + name).classList.toggle('on', which === name);
+    $('#view-' + name).classList.toggle('hidden', which !== name);
+  }
 }
+$('#tab-writer').onclick = () => tab('writer');
 $('#tab-song').onclick = () => tab('song');
 $('#tab-cover').onclick = () => tab('cover');
 
@@ -539,7 +578,32 @@ $('#go-song').onclick = async () => {
 };
 
 /* ---------- кавер ---------- */
-let picked = null, score = null;
+let picked = null, score = null, scoreMode = 'melody', sourceSeconds = null, originalState = null;
+let sourceRevision = 0;
+
+function scoreEdited(){
+  return !!(window.__prState && originalState && JSON.stringify(window.__prState) !== originalState);
+}
+function coverABC(){
+  // The editor supports a subset of ABC. Never round-trip an untouched score:
+  // key changes, short notes and chord positions must reach the model intact.
+  return scoreEdited() ? PR.build(window.__prState) : score;
+}
+function mountOriginalScore(){
+  $('#pr-stop')?.click();
+  window.__prState = null; originalState = null;
+  $('#roll').replaceChildren();
+  if (HAS_ROLL){
+    try {
+      window.__prState = PR.parse(score);
+      originalState = JSON.stringify(window.__prState);
+      PR.mount($('#roll'), window.__prState, updateCoverDuration);
+    } catch(e){ console.warn('Could not display score', e); }
+  }
+  $('#st-fit').textContent = '';
+  updateCoverDuration();
+}
+$('#restore-score').onclick = mountOriginalScore;
 $('#drop').onclick = () => $('#file').click();
 $('#drop').ondragover = e => { e.preventDefault(); };
 $('#drop').ondrop = e => { e.preventDefault(); take(e.dataTransfer.files[0]); };
@@ -547,7 +611,7 @@ $('#file').onchange = e => take(e.target.files[0]);
 
 function take(f){
   if (!f) return;
-  picked = f; score = null; window.__prState = null;
+  picked = f; score = null; window.__prState = null; originalState = null; sourceSeconds = null; sourceRevision++;
   $('#pane-roll').classList.add('hidden'); $('#pane-sing').classList.add('hidden');
   $('#drop').textContent = f.name + '  ' + Math.round(f.size/1048576*10)/10 + ' ' + t('mb');
   $('#go-scan').disabled = false;
@@ -556,41 +620,37 @@ function take(f){
 $('#go-scan').onclick = async () => {
   if (!picked) return;
   const st = $('#st-scan');
+  const revision = ++sourceRevision, source = picked, scanMode = $('#c-what').value;
   $('#go-scan').disabled = true; st.classList.remove('bad'); st.textContent = t('uploading');
   try {
-    const buf = await picked.arrayBuffer();
+    const buf = await source.arrayBuffer();
     const j = await post('/api/scan', buf, {'Content-Type':'application/octet-stream',
                                             'X-Lang': lang,
-                                            'X-Mode': ($('#c-what') ? $('#c-what').value : 'melody'),
-                                            'X-Filename': encodeURIComponent(picked.name)});
+                                            'X-Mode': scanMode,
+                                            'X-Filename': encodeURIComponent(source.name)});
     watch(j.id, st, r => {
+      if (revision !== sourceRevision) return; // a newer source/scan owns the UI
       st.textContent = t('scan_done').replace('%t', r.took);
-      score = r.abc; window.__prState = null;
+      score = r.abc; scoreMode = scanMode; sourceSeconds = r.score_seconds ?? null;
       $('#pane-roll').classList.remove('hidden');
       $('#pane-sing').classList.remove('hidden');
-      if (HAS_ROLL){
-        try {
-          // Держим состояние редактора: именно из него берём партитуру при пении,
-          // иначе правки мышкой никуда не попадут.
-          window.__prState = PR.parse(score);
-          PR.mount($('#roll'), window.__prState, updateCoverDuration);
-        } catch(e){ console.warn('партитуру не разобрали', e); }
-      }
-      updateCoverDuration();
+      mountOriginalScore();
       $('#go-scan').disabled = false;
     });
   } catch(e){ st.textContent = e.message; st.classList.add('bad'); $('#go-scan').disabled = false; }
 };
 
-// The server recalculates from the submitted ABC; this preview follows the
-// editor's bar padding, so tempo and note edits update the displayed budget.
+// Use the server estimate for the original score, and editor timing after edits.
+// The server always validates the actual submitted ABC before generation.
 function updateCoverDuration(){
   const mode = $('#c-duration-mode');
   if (!mode) return;
   const manual = mode.value === 'manual';
   $('#c-seconds-label').classList.toggle('hidden', !manual);
-  let estimate = null;
-  if (HAS_ROLL && window.__prState){
+  const edited = scoreEdited();
+  $('#restore-score').disabled = !edited;
+  let estimate = sourceSeconds;
+  if (edited){
     try {const parsed = PR.parse(PR.build(window.__prState)); estimate = parsed.bars * parsed.meter.num * 60 / parsed.tempo / (parsed.meter.den / 4);} catch(e){}
   }
   const limit = manual ? Number($('#c-seconds').value) : Math.ceil(estimate || 0) + 5;
@@ -618,17 +678,12 @@ $('#go-cover').onclick = async () => {
   const st = $('#st-cover');
   $('#go-cover').disabled = true; st.classList.remove('bad'); st.textContent = t('sending');
   try {
-    // Берём партитуру ИЗ РЕДАКТОРА, а не исходную: смысл всей затеи в том,
-    // что человек её поправил.
-
-
     const duration = updateCoverDuration();
     if (duration.error) throw new Error(duration.error);
-    let abc = score;
-    if (HAS_ROLL && window.__prState) { try { abc = PR.build(window.__prState); } catch(e){} }
+    const abc = coverABC();
     const j = await post('/api/generate', {
       style: $('#c-style').value.trim(), lyrics: $('#c-lyrics').value.trim(), abc: abc, lang: lang, seconds:duration.seconds,
-      with_chords: ($('#c-what') && $('#c-what').value === 'full'),
+      with_chords: scoreMode === 'full',
       cfg_scale: $('#c-cfg').value ? parseFloat($('#c-cfg').value) : null});
     watch(j.id, st, r => {
       st.textContent = t('done').replace('%t', r.took);
@@ -638,5 +693,6 @@ $('#go-cover').onclick = async () => {
   } catch(e){ st.textContent = e.message; st.classList.add('bad'); $('#go-cover').disabled = false; }
 };
 </script>
+<script src="/ui/writer.js"></script>
 </body>
 </html>

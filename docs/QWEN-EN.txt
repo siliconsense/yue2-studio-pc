@@ -1,0 +1,33 @@
+EXTENDED BUILD 1.3.0 — local Qwen assistant
+
+Open Idea → song, enter an idea and optional genre, choose RU/EN and draft
+length, then press Write lyrics and style. Start with Qwen3.5-4B.
+Preview and edit the draft before applying it. Undo restores previous song
+fields; Save .txt exports the draft. Music duration is set separately on
+the song tab. Covers and their scores are not changed by the assistant.
+
+Update: close the studio and console, then copy ALL contents of this ZIP's
+studio folder into your existing installation, replacing files. Include
+writer.py and ui/writer.js. Keep engine, .venv, tools and songs. Run start.bat
+and press Ctrl+F5. The header should show v1.3.0.
+
+First use downloads the selected GGUF from Hugging Face (4B: 2.55 GiB;
+9B: 5.29 GiB) plus about 626 MiB of pinned llama.cpp CUDA 12.4 binaries
+from GitHub. Allow 10 GB free disk for 4B or 15 GB for 9B and extraction.
+Downloads resume and SHA-256 hashes are checked. Cancelling a stalled
+network read can take up to 30 seconds. Subsequent writing works offline.
+Models live in engine/models/LLM; runtime diagnostics: logs/writer-runtime.log.
+
+This uses a separate llama.cpp runtime and does not reinstall PyTorch.
+Our idle music engine stops before Qwen loads; Qwen exits after success,
+failure or cancellation. The next music job restarts the music engine.
+One task at a time avoids competing GPU allocations. 9B can use RAM if
+VRAM is limited, slowing it down; use 4B or CPU mode if needed.
+Prompts, lyrics and audio are never sent to a cloud generation API.
+The preview is kept in browser session storage; use Save .txt to keep it.
+
+Release 1.3.0 includes Qwen and the cover score-preservation fix. A user
+validated both 4B and 9B, model unloading/reloading and the return to music
+on a PC with 6 GB VRAM and 32 GB RAM. The cover fix was also confirmed on
+their example. Performance on other PCs may differ.
+Release: https://github.com/siliconsense/yue2-studio-pc/releases/tag/v1.3.0

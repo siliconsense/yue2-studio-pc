@@ -8,6 +8,22 @@ everything and opens the studio in your browser.
 
 ![The studio](docs/studio.jpg)
 
+## Local Qwen assistant — 1.3.0
+
+The **Idea → song** tab drafts lyrics and a style from your idea. Choose RU/EN,
+a draft length and Qwen3.5-4B or 9B. Preview and edit before applying it to the
+song. Undo and TXT export are included; the assistant does not change covers.
+
+Models install separately on first use; start with 4B. The music engine and
+Qwen run in turn, and Qwen unloads after each request. Music restarts its engine
+on the next job. No PyTorch reinstall or music-model download is required.
+
+[Update instructions, download sizes and first use](docs/QWEN-EN.txt).
+Both Qwen models and the switch back to music generation were reported working
+on a Windows PC with 6 GB VRAM and 32 GB RAM. This is a user validation,
+not a performance guarantee for every PC.
+
+
 ## What you need
 
 - Windows 10 or 11
@@ -78,6 +94,21 @@ and lyrics rather than the notes, so leave it off for covers.
 
 The editor is [pianoroll.js](https://github.com/siliconsense/pianoroll.js), our
 dependency-free score editor.
+
+## Cover score fidelity — v1.3.0
+
+An untouched transcription now goes straight to the model. Previously, even an
+unedited score was rebuilt by the editor, potentially altering note notation,
+key changes and chord positions. **Restore original score** discards edits and
+lyric fitting. Generation keeps the mode used for that transcription; changing
+the mode selector only affects the next transcription.
+
+This fixes score delivery, not model adherence. YuE2 can still deviate from the
+vocal rhythm. Use the original lyrics without fitting when checking fidelity.
+The editor supports a subset of ABC; manually edited complex scores still need
+separate validation. Server and browser checks pass, and a user confirmed that
+the cover followed the vocal timing correctly on their PC after this fix.
+This does not guarantee exact model adherence for every recording.
 
 ## Cover duration — v1.2.0
 

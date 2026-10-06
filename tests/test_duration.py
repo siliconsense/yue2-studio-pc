@@ -81,6 +81,21 @@ class DurationTests(unittest.TestCase):
             finally:
                 server.JOBS.pop('test-track', None)
 
+    def test_scan_retains_original_and_reports_duration_or_unknown(self):
+        for abc, expected in [(score(), 240), ('X:1\nK:C\n(3CDE', None)]:
+            entry = {'status': {'completed': True}}
+            with patch.object(server, 'api', return_value={'prompt': entry}), \
+                 patch.object(server, 'find_text', return_value=abc), patch.object(server, 'log'):
+                server.JOBS['test-scan'] = {'lang': 'en'}
+                try:
+                    server.track('test-scan', 'prompt', 'scan', 'test')
+                    result = server.JOBS['test-scan']
+                    self.assertEqual(result['abc'], abc)
+                    self.assertEqual(result['score_seconds'], expected)
+                    self.assertEqual(result['state'], 'done')
+                finally:
+                    server.JOBS.pop('test-scan', None)
+
     def test_report_node_installs_into_existing_engine_without_touching_other_nodes(self):
         with tempfile.TemporaryDirectory() as d, patch.object(server,'ENGINE',Path(d)):
             custom=Path(d)/'custom_nodes';custom.mkdir();other=custom/'unrelated.py';other.write_text('keep')
